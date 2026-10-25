@@ -1,0 +1,1863 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}</style>
+<title>Lull Sleep Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=DM+Mono:wght@400;500&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: four tabs (Home, Insights, Tools, Me). Home shows only what matters right now: log, tonight, this week's focus, one key number. */
+:root {
+  --bg: #f2f4fa;
+  --surface: #ffffff;
+  --surface-2: #e8ecf6;
+  --ink: #151a33;
+  --ink-soft: #535a78;
+  --line: #d5dbeb;
+  --accent: #4448c2;
+  --accent-ink: #ffffff;
+  --accent-soft: #c9ccf5;
+  --dawn: #c4731a;
+  --good: #217a58;
+  --bad: #b8404f;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1126; --surface: #151a35; --surface-2: #1e2445; --ink: #e8eafa; --ink-soft: #99a1c8;
+    --line: #2a3158; --accent: #9ea3ff; --accent-ink: #0d1126; --accent-soft: #3a3f82; --dawn: #f0b25a;
+    --good: #62d1a2; --bad: #ff8d9b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1126; --surface: #151a35; --surface-2: #1e2445; --ink: #e8eafa; --ink-soft: #99a1c8;
+  --line: #2a3158; --accent: #9ea3ff; --accent-ink: #0d1126; --accent-soft: #3a3f82; --dawn: #f0b25a;
+  --good: #62d1a2; --bad: #ff8d9b; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 17px/1.5 var(--font-body);
+  padding-block: 20px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+h1, h2, h3, .display { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(1.7rem, 6vw, 2.2rem); line-height: 1.15; }
+h2 { font-size: 1.3rem; line-height: 1.2; }
+h3 { font-size: 1.05rem; }
+p { margin: 0; }
+.soft { color: var(--ink-soft); }
+.small { font-size: 0.9rem; }
+.mono { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+/* header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; }
+.brand svg { width: 28px; height: 28px; color: var(--accent); }
+.syncpill { font: 500 0.72rem var(--font-data); color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; margin-left: 4px; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 14px; }
+.tabs button { font: 600 0.95rem var(--font-body); color: var(--ink-soft); background: none; border: 0; padding: 11px 6px; border-radius: 10px; cursor: pointer; min-height: 44px; }
+.tabs button[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(10, 14, 40, 0.15); }
+
+/* surfaces */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card > header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px 16px; flex-wrap: wrap; }
+.card.lead { border-color: var(--accent); }
+.grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
+@media (min-width: 820px) { .grid.even { grid-template-columns: 1fr 1fr; } }
+.banner { background: var(--surface-2); border: 1px dashed var(--ink-soft); border-radius: 12px; padding: 12px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.view { display: flex; flex-direction: column; gap: 18px; }
+.view[hidden] { display: none; }
+.stack { display: flex; flex-direction: column; gap: 18px; }
+
+/* controls */
+label.field { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; font-weight: 600; color: var(--ink-soft); min-width: 0; }
+input[type="time"], input[type="date"], input[type="number"], input[type="text"], select, textarea {
+  font: 500 1rem var(--font-body); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; width: 100%; min-width: 0; min-height: 46px;
+}
+textarea { resize: vertical; min-height: 64px; }
+.row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.btn { font: 600 1rem var(--font-body); background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 12px; padding: 12px 20px; cursor: pointer; min-height: 46px; }
+.btn[disabled] { opacity: 0.5; cursor: default; }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn.small { padding: 8px 14px; font-size: 0.9rem; min-height: 38px; }
+.btn.danger { color: var(--bad); border-color: var(--bad); }
+.btn.wide { width: 100%; }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.link { background: none; border: 0; color: var(--accent); font: 600 0.95rem var(--font-body); cursor: pointer; padding: 6px 0; text-decoration: underline; text-underline-offset: 3px; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.seg label { position: relative; }
+.seg input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.seg span { display: block; padding: 10px 15px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.95rem; font-weight: 600; color: var(--ink-soft); background: var(--bg); }
+.seg input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.seg input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+.rate { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.rate label { position: relative; }
+.rate input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.rate span { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 2px; border: 1px solid var(--line); border-radius: 12px; font-size: 0.8rem; font-weight: 600; color: var(--ink-soft); background: var(--bg); text-align: center; }
+.rate span b { font: 700 1.25rem var(--font-display); color: var(--ink); }
+.rate input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.rate input:checked + span b { color: var(--accent-ink); }
+.rate input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip-t { font: 600 0.9rem var(--font-body); border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); border-radius: 999px; padding: 9px 14px; cursor: pointer; min-height: 40px; }
+.chip-t[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.checks { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.checks label { display: flex; gap: 10px; align-items: center; font-size: 1rem; min-height: 36px; }
+.checks input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+legend { font-size: 0.9rem; font-weight: 600; color: var(--ink-soft); padding: 0; margin-bottom: 6px; }
+details > summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 0; }
+details[open] > summary { margin-bottom: 8px; }
+
+/* welcome */
+.onb { display: flex; flex-direction: column; gap: 18px; }
+.choices { display: grid; gap: 10px; }
+.choice { text-align: left; font: 600 1.05rem var(--font-body); background: var(--bg); color: var(--ink); border: 2px solid var(--line); border-radius: 14px; padding: 15px 16px; cursor: pointer; min-height: 56px; }
+.choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.steps-dots { display: flex; gap: 6px; }
+.steps-dots i { height: 6px; flex: 1; border-radius: 3px; background: var(--line); }
+.steps-dots i.on { background: var(--accent); }
+
+/* home */
+.hello { display: flex; flex-direction: column; gap: 4px; padding: 4px 2px; }
+.bigtime { font-family: var(--font-display); font-weight: 700; font-size: clamp(3.2rem, 14vw, 4.75rem); line-height: 1; letter-spacing: -0.03em; }
+.count { font-weight: 600; color: var(--dawn); }
+.dots { display: flex; gap: 8px; flex-wrap: wrap; }
+.dots i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: block; }
+.dots i.ok { background: var(--good); border-color: var(--good); }
+.dots i.miss { background: transparent; border-color: var(--bad); }
+.dots i.now { border-color: var(--accent); }
+.ring { position: relative; width: 112px; height: 112px; flex: none; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring .val { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 2.1rem; line-height: 1; }
+.ring .val small { display: block; font: 600 0.62rem var(--font-body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin-top: 4px; }
+.sumrow { display: flex; gap: 18px; align-items: center; }
+.keyv { font-family: var(--font-display); font-weight: 700; font-size: 2.6rem; line-height: 1; white-space: nowrap; }
+.pill { display: inline-block; font-size: 0.78rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.pill.good { color: var(--good); } .pill.bad { color: var(--bad); } .pill.flat { color: var(--ink-soft); } .pill.warn { color: var(--dawn); }
+.msg { min-height: 1.4em; font-weight: 600; }
+.msg.err { color: var(--bad); } .msg.ok { color: var(--good); }
+.preview { background: var(--surface-2); border-radius: 10px; padding: 10px 14px; font-size: 0.92rem; }
+
+/* insights, lists, tables */
+.bul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.bul li { padding-left: 18px; position: relative; }
+.bul li::before { content: ""; position: absolute; left: 0; top: 0.6em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.chart { width: 100%; min-width: 0; }
+.chart svg { display: block; }
+.ax text { fill: var(--ink-soft); font: 11px var(--font-data); }
+.ax line { stroke: var(--line); }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.85rem; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+td.mono { font-size: 0.82rem; }
+.delta.up { color: var(--good); } .delta.down { color: var(--bad); }
+.facts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.fact { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+.fact .v { font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; }
+.ideas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ideas li { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+
+/* log + nights */
+.entries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.entries li { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.entries li:first-child { border-top: 0; }
+.entries .meta { display: flex; gap: 6px 14px; flex-wrap: wrap; color: var(--ink-soft); font-size: 0.85rem; }
+
+/* tools */
+.tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.tile { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; color: var(--ink); font: inherit; }
+.tile strong { font: 700 1.1rem var(--font-display); }
+.tile span { color: var(--ink-soft); font-size: 0.92rem; }
+.dlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dlist li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 0.95rem; flex-wrap: wrap; }
+.drinks { display: flex; gap: 8px; flex-wrap: wrap; }
+.timer { font-family: var(--font-display); font-weight: 700; font-size: 2.6rem; }
+.breath { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 12px 0; }
+.orb-box { width: 220px; height: 220px; display: grid; place-items: center; }
+.orb { width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--accent-soft), var(--accent)); transform: scale(0.45); opacity: 0.9; }
+.cue { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; min-height: 1.3em; }
+.steps { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 8px; }
+.check-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.check-list label { display: flex; gap: 10px; align-items: center; }
+.check-list input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* coach */
+.chat { display: flex; flex-direction: column; gap: 12px; max-height: 55vh; overflow-y: auto; padding: 2px; }
+.bubble { padding: 12px 14px; border-radius: 14px; max-width: 94%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble.me { align-self: flex-end; background: var(--accent); color: var(--accent-ink); }
+.bubble.ai { align-self: flex-start; background: var(--surface-2); }
+
+footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a.6.6 0 0 0-.8-.7A9.5 9.5 0 1 0 21.2 15.4a.6.6 0 0 0-.7-.8Z"/></svg>
+      Lull <span class="syncpill" id="syncPill" hidden></span>
+    </div>
+    <button type="button" class="btn small" id="logBtn">Log a night</button>
+  </header>
+
+  <nav class="tabs" aria-label="Sections">
+    <button type="button" data-tab="home">Home</button>
+    <button type="button" data-tab="insights">Insights</button>
+    <button type="button" data-tab="tools">Tools</button>
+    <button type="button" data-tab="me">Me</button>
+  </nav>
+
+  <div id="sampleBanner" class="banner" hidden>
+    <span><strong>These are example nights.</strong> <span class="soft">Log your own and Lull switches to your real data.</span></span>
+    <button type="button" class="btn small" id="goLog">Log last night</button>
+  </div>
+
+  <!-- WELCOME -->
+  <section id="v-welcome" class="view" hidden>
+    <div class="card onb" id="welcome"></div>
+  </section>
+
+  <!-- HOME -->
+  <section id="v-home" class="view" hidden>
+    <div class="hello" id="hello"></div>
+    <div class="stack" id="homeStack">
+      <div id="cPersonalize" class="banner" hidden>
+        <span><strong>Make Lull fit you.</strong> <span class="soft">Four quick questions, 30 seconds.</span></span>
+        <button type="button" class="btn small" id="goWelcome">Personalize</button>
+      </div>
+      <div class="card lead" id="cQuick"></div>
+      <div class="card" id="cTonight"></div>
+      <div class="card" id="cFocus"></div>
+      <div class="card" id="cKey"></div>
+    </div>
+  </section>
+
+  <!-- LOG -->
+  <section id="v-log" class="view" hidden>
+    <form class="card" id="logForm" autocomplete="off">
+      <header><h2 id="formTitle">Log a night</h2><button type="button" class="link" id="logBack">Back</button></header>
+      <div class="row">
+        <label class="field" for="fDate">Morning you woke up
+          <input type="date" id="fDate" required>
+        </label>
+        <label class="field" for="fBed">Got into bed
+          <input type="time" id="fBed" value="23:00" required>
+        </label>
+        <label class="field" for="fWake">Woke up for good
+          <input type="time" id="fWake" value="07:00" required>
+        </label>
+      </div>
+      <fieldset>
+        <legend>How rested do you feel?</legend>
+        <div class="rate" id="fQual"></div>
+      </fieldset>
+      <div class="row">
+        <label class="field" for="fLat">Minutes to fall asleep
+          <input type="number" id="fLat" min="0" max="240" step="1" value="15" inputmode="numeric">
+        </label>
+        <label class="field" for="fAwake">Minutes awake in the night
+          <input type="number" id="fAwake" min="0" max="480" step="1" value="0" inputmode="numeric">
+        </label>
+      </div>
+      <fieldset>
+        <legend>What was true yesterday? (tick any that apply)</legend>
+        <div class="checks" id="fTags"></div>
+        <p class="small soft" id="fTagHint"></p>
+      </fieldset>
+      <label class="field" for="fNote">Note (optional)
+        <textarea id="fNote" maxlength="300"></textarea>
+      </label>
+      <div class="preview mono" id="fPreview"></div>
+      <div class="btn-row">
+        <button type="submit" class="btn" id="fSave">Save night</button>
+        <span class="msg" id="fMsg" role="status"></span>
+      </div>
+    </form>
+  </section>
+
+  <!-- INSIGHTS -->
+  <section id="v-insights" class="view" hidden>
+    <div class="card">
+      <header><h2>In plain words</h2><p class="small soft" id="sumNote"></p></header>
+      <ul class="bul" id="inSummary"></ul>
+    </div>
+    <div class="card">
+      <header><h2>Ask the coach</h2><p class="small soft" id="coachNote"></p></header>
+      <div class="chips" id="coachChips"></div>
+      <div class="chat" id="chat" aria-live="polite"></div>
+      <form id="coachForm" class="btn-row" style="flex-wrap:nowrap;align-items:flex-end">
+        <label class="field" for="coachIn" style="flex:1">Your question
+          <textarea id="coachIn" maxlength="600" style="min-height:48px" placeholder="Why do I wake up tired on Mondays?"></textarea>
+        </label>
+        <button type="submit" class="btn" id="coachSend">Ask</button>
+      </form>
+      <p class="small soft">The coach is Claude. It sees a short summary of your logged nights when you ask, can be wrong, and does not diagnose.</p>
+    </div>
+    <div class="card">
+      <header><h2>Your nights</h2><div class="seg" id="metSeg" role="radiogroup" aria-label="Chart"></div></header>
+      <div class="seg" id="rangeSeg" role="radiogroup" aria-label="Range"></div>
+      <div class="chart" id="chartMain"></div>
+      <div class="legend" id="chartLegend"></div>
+    </div>
+    <div class="card">
+      <h2>What helps and what hurts</h2>
+      <p class="soft small" id="effNote"></p>
+      <ul class="ideas" id="effList"></ul>
+      <details><summary>Show the numbers</summary><div class="scroll"><table id="effTable"></table></div><div id="corrBox"></div></details>
+    </div>
+    <div class="card">
+      <h2>Your body clock</h2>
+      <div id="clockSum"></div>
+      <details id="clockDetails"><summary>Show my rhythm charts</summary>
+        <div class="stack">
+          <h3>When you slept</h3>
+          <div class="chart" id="chartTimeline"></div>
+          <div class="legend"><span><i style="background:var(--accent-soft)"></i>In bed, awake</span><span><i style="background:var(--accent)"></i>Asleep until waking</span></div>
+          <h3>Day by day, two days wide</h3>
+          <div class="chart" id="chartActo"></div>
+          <p class="small soft">Each row shows one day and the next one beside it. A steady schedule makes a straight column. A drifting one slants.</p>
+        </div>
+      </details>
+    </div>
+    <div class="card" id="weekCmp"></div>
+    <div class="card">
+      <h2>More things to try</h2>
+      <ul class="ideas" id="inNext"></ul>
+    </div>
+  </section>
+
+  <!-- TOOLS -->
+  <section id="v-tools" class="view" hidden>
+    <div class="tiles" id="toolTiles"></div>
+
+    <div class="stack" id="tool-energy" hidden>
+      <button type="button" class="link" data-toolback style="align-self:flex-start">All tools</button>
+      <div class="card">
+        <header><h2>Energy forecast for today</h2><p class="small soft" id="energyNote"></p></header>
+        <div class="chart" id="chartEnergy"></div>
+        <ul class="dlist" id="energyFacts"></ul>
+        <p class="small soft">An estimate from a two-process sleep model: sleep pressure builds the longer you are awake, and your body clock adds a daily wave with an early-afternoon dip. Real days vary with light, food and stress.</p>
+      </div>
+      <div class="card">
+        <header><h2>Caffeine in your body</h2><p class="small soft" id="cafTotal"></p></header>
+        <div class="drinks" id="drinkBtns"></div>
+        <div class="row">
+          <label class="field" for="cafTime">Time
+            <input type="time" id="cafTime">
+          </label>
+          <label class="field" for="cafMg">Custom amount (mg)
+            <input type="number" id="cafMg" min="5" max="500" step="5" placeholder="e.g. 80" inputmode="numeric">
+          </label>
+        </div>
+        <div class="btn-row"><button type="button" class="btn ghost small" id="cafCustom">Add custom amount</button></div>
+        <div class="chart" id="chartCaf"></div>
+        <p id="cafAdvice"></p>
+        <ul class="dlist" id="cafList"></ul>
+        <label class="field" for="setHalf">How fast you clear caffeine
+          <select id="setHalf">
+            <option value="4">Fast (half-life 4 h)</option>
+            <option value="5">Typical (5 h)</option>
+            <option value="6.5">Slower (6.5 h)</option>
+            <option value="8">Slow, e.g. pregnancy or the pill (8 h)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="stack" id="tool-calm" hidden>
+      <button type="button" class="link" data-toolback style="align-self:flex-start">All tools</button>
+      <div class="card">
+        <h2>Slow breathing</h2>
+        <p class="soft small">Longer, slower exhales calm the body. Try five minutes in bed with the lights low. Stop if you feel dizzy and go back to normal breathing.</p>
+        <div class="seg" id="patSeg" role="radiogroup" aria-label="Breathing pattern"></div>
+        <div class="breath">
+          <div class="orb-box"><div class="orb" id="orb"></div></div>
+          <div class="cue" id="cue" aria-live="polite">Ready when you are</div>
+          <div class="mono soft" id="cueSub"></div>
+          <button type="button" class="btn" id="breathBtn">Start</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Lying awake?</h2>
+        <ol class="steps">
+          <li>Don't check the clock. It only adds pressure.</li>
+          <li>If it feels like 20 minutes or more, get up. Keep lights low and sit somewhere comfortable.</li>
+          <li>Do something dull and calm: read a paper book, stretch gently, or listen to quiet audio.</li>
+          <li>Go back to bed when your eyes get heavy, not at a set time.</li>
+          <li>Keep your wake-up time the same tomorrow, even after a bad night. That is what repairs sleep.</li>
+        </ol>
+        <p class="small soft">Poor sleep that lasts three months or more, loud snoring with gasping, or sleepiness that makes driving unsafe are reasons to see a doctor. Good treatment exists, including CBT-I, a structured program that works better than sleeping pills over the long run.</p>
+      </div>
+      <div class="card">
+        <h2>Bedroom check</h2>
+        <ul class="check-list" id="roomList"></ul>
+      </div>
+    </div>
+
+    <div class="stack" id="tool-nap" hidden>
+      <button type="button" class="link" data-toolback style="align-self:flex-start">All tools</button>
+      <div class="card">
+        <h2>Nap planner</h2>
+        <p id="napAdvice"></p>
+        <label class="field" for="napLen">Length
+          <select id="napLen"><option value="10">10 minutes</option><option value="20" selected>20 minutes</option><option value="30">30 minutes</option></select>
+        </label>
+        <div class="timer mono" id="napClock">20:00</div>
+        <div class="btn-row"><button type="button" class="btn" id="napBtn">Start nap timer</button></div>
+        <p class="small soft">Short naps in the early afternoon refresh you without stealing from tonight. Longer naps, or naps after about 3 pm, make it harder to fall asleep.</p>
+      </div>
+    </div>
+
+    <div class="stack" id="tool-jet" hidden>
+      <button type="button" class="link" data-toolback style="align-self:flex-start">All tools</button>
+      <div class="card">
+        <header><h2>Jet lag planner</h2><p class="small soft">Shift your body clock before and after a flight</p></header>
+        <div class="row">
+          <label class="field" for="jlDir">Flying
+            <select id="jlDir"><option value="1">East (you lose hours)</option><option value="-1">West (you gain hours)</option></select>
+          </label>
+          <label class="field" for="jlHrs">Time zones crossed
+            <input type="number" id="jlHrs" min="1" max="12" step="1" value="5" inputmode="numeric">
+          </label>
+          <label class="field" for="jlDate">Arrival date
+            <input type="date" id="jlDate">
+          </label>
+          <label class="field" for="jlPre">Days to prepare before
+            <select id="jlPre"><option value="0">0</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select>
+          </label>
+        </div>
+        <div id="jlOut"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ME -->
+  <section id="v-me" class="view" hidden>
+    <div class="card">
+      <header><h2>About you</h2><button type="button" class="link" id="redoSetup">Redo setup</button></header>
+      <label class="field" for="meName">Name
+        <input type="text" id="meName" maxlength="30" placeholder="What should Lull call you?">
+      </label>
+      <label class="field" for="meGoal">What you most want to change
+        <select id="meGoal"></select>
+      </label>
+      <fieldset>
+        <legend>Things that sound like you</legend>
+        <div class="checks" id="meIssues"></div>
+      </fieldset>
+    </div>
+    <div class="card">
+      <h2>Your schedule</h2>
+      <div class="row">
+        <label class="field" for="setWake">Wake-up time
+          <input type="time" id="setWake" value="07:00">
+        </label>
+        <label class="field" for="setNeed">Sleep you need (hours)
+          <input type="number" id="setNeed" min="5" max="11" step="0.25" value="8" inputmode="decimal">
+        </label>
+      </div>
+      <p class="small soft" id="meBed"></p>
+      <div class="row">
+        <label class="field" for="setClock">Clock
+          <select id="setClock"><option value="12">12-hour (10:30 pm)</option><option value="24">24-hour (22:30)</option></select>
+        </label>
+        <label class="field" for="setUnit">Temperature
+          <select id="setUnit"><option value="c">Celsius</option><option value="f">Fahrenheit</option></select>
+        </label>
+      </div>
+      <fieldset>
+        <legend>Days you wake without an alarm</legend>
+        <div class="chips" id="setFree"></div>
+      </fieldset>
+    </div>
+    <div class="card">
+      <header><h2>Your nights</h2><button type="button" class="btn ghost small" id="meAdd">Add a night</button></header>
+      <ul class="entries" id="entryList"></ul>
+    </div>
+    <div class="card">
+      <h2>Your data</h2>
+      <p class="soft small" id="dataNote"></p>
+      <div class="btn-row">
+        <button type="button" class="btn ghost small" id="exCsv">Save as spreadsheet</button>
+        <button type="button" class="btn ghost small" id="exJson">Save backup file</button>
+        <button type="button" class="btn ghost small" id="bkCopy">Copy backup text</button>
+      </div>
+      <span class="msg small" id="bkMsg" role="status"></span>
+      <label class="field" for="bkText">Restore from backup
+        <textarea id="bkText" placeholder="Paste backup text here"></textarea>
+      </label>
+      <div class="btn-row">
+        <button type="button" class="btn small" id="bkRestore">Restore</button>
+        <button type="button" class="btn ghost small danger" id="bkClear">Delete all my nights</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Lull gives general sleep guidance and is not medical advice.</p>
+    <p id="footStore">Your nights stay in this browser. Clearing site data removes them, so save a backup now and then.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================= storage ================= */
+  const mem = {};
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); if (v !== null) return JSON.parse(v); } catch (e) {} return (k in mem) ? mem[k] : d; },
+    set(k, v) { mem[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  /* ================= constants ================= */
+  const TAGS = [
+    { id: "caffeine", label: "Caffeine after 2 pm", short: "Late caffeine", kind: "bad" },
+    { id: "alcohol", label: "Alcohol", short: "Alcohol", kind: "bad" },
+    { id: "screens", label: "Screens in the last hour", short: "Screens in bed", kind: "bad" },
+    { id: "lateMeal", label: "Big meal within 3 h of bed", short: "Late meal", kind: "bad" },
+    { id: "stress", label: "Stressful day", short: "Stressful day", kind: "bad" },
+    { id: "nap", label: "Napped", short: "Napped", kind: "bad" },
+    { id: "exercise", label: "Exercised", short: "Exercised", kind: "good" },
+    { id: "daylight", label: "Outside in morning light", short: "Morning light", kind: "good" }
+  ];
+  const tagById = id => TAGS.filter(t => t.id === id)[0];
+  const QUALITY = ["Drained", "Tired", "Okay", "Rested", "Great"];
+  const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const DRINKS = [["Coffee", 95], ["Espresso", 65], ["Tea", 45], ["Cola", 35], ["Energy drink", 150]];
+  const GOALS = [["fall", "Fall asleep faster"], ["stay", "Stay asleep through the night"], ["rested", "Wake up feeling rested"], ["steady", "Keep a steadier schedule"], ["learn", "Just understand my sleep"]];
+  const ISSUES = [["caffeine", "I have caffeine in the afternoon"], ["screens", "I use my phone or TV in bed"], ["alcohol", "I use alcohol to unwind"], ["mind", "My mind is busy at night"], ["nap", "I nap during the day"], ["irregular", "My schedule is irregular"], ["room", "My bedroom is too warm, bright or noisy"], ["meal", "I eat late in the evening"]];
+  const ISSUE_SHORT = { caffeine: "afternoon caffeine", screens: "using screens in bed", alcohol: "alcohol to unwind", mind: "a busy mind at night", nap: "daytime naps", irregular: "an irregular schedule", room: "a bedroom that is too warm, bright or noisy", meal: "late meals" };
+  const ISSUE_TAG = { caffeine: "caffeine", screens: "screens", alcohol: "alcohol", meal: "lateMeal", nap: "nap", mind: "stress" };
+  const PATTERNS = {
+    p478: { name: "4-7-8", steps: [["Breathe in", 4, 1], ["Hold", 7, 1], ["Breathe out", 8, 0.45]] },
+    box: { name: "Box", steps: [["Breathe in", 4, 1], ["Hold", 4, 1], ["Breathe out", 4, 0.45], ["Hold", 4, 0.45]] },
+    long: { name: "Long exhale", steps: [["Breathe in", 4, 1], ["Breathe out", 6, 0.45]] }
+  };
+  const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const DAY0 = 864e5;
+
+  /* ================= helpers ================= */
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const pad = n => (n < 10 ? "0" : "") + n;
+  const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+  const sd = a => { if (a.length < 2) return 0; const m = avg(a); return Math.sqrt(avg(a.map(x => (x - m) * (x - m)))); };
+  const median = a => { if (!a.length) return 0; const s = a.slice().sort((x, y) => x - y), h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; };
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const toMin = t => { const p = String(t).split(":"); return (+p[0]) * 60 + (+p[1]); };
+  const norm = m => ((Math.round(m) % 1440) + 1440) % 1440;
+  const hhmm = m => { m = norm(m); return pad(Math.floor(m / 60)) + ":" + pad(m % 60); };
+  const circ = (a, b) => { const d = Math.abs(norm(a) - norm(b)); return Math.min(d, 1440 - d); };
+  const dur = m => { m = Math.round(Math.abs(m)); return Math.floor(m / 60) + "h " + pad(m % 60) + "m"; };
+  const hrs = m => (m / 60).toFixed(1) + " h";
+  const key = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  const fromKey = k => { const p = k.split("-"); return new Date(+p[0], +p[1] - 1, +p[2], 12); };
+  const ord = k => { const p = k.split("-"); return Math.round(Date.UTC(+p[0], +p[1] - 1, +p[2]) / DAY0); };
+  const addDays = (k, n) => key(new Date(fromKey(k).getTime() + n * DAY0));
+  const fmtDate = k => fromKey(k).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  const today = () => key(new Date());
+  const nowMin = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); };
+  const clock = m => {
+    m = norm(m);
+    const h = Math.floor(m / 60), mm = m % 60;
+    if (cfg.h24) return pad(h) + ":" + pad(mm);
+    return ((h % 12) || 12) + ":" + pad(mm) + " " + (h >= 12 ? "pm" : "am");
+  };
+  const temp = () => cfg.f ? "65 °F" : "18 °C";
+  const sgn = (v, d) => (v > 0 ? "+" : v < 0 ? "-" : "") + Math.abs(v).toFixed(d == null ? 0 : d);
+  const say = (el, text, cls) => { el.textContent = text; el.className = el.className.replace(/\b(ok|err)\b/g, "").trim() + (cls ? " " + cls : ""); };
+
+  /* ================= state ================= */
+  const blank = () => ({
+    v: 2, entries: {}, caf: {}, dels: {},
+    meta: {
+      u: 0,
+      settings: { wake: "07:00", need: 8, h24: false, f: false, half: 5, free: [0, 6] },
+      room: {}, exps: [],
+      profile: { name: "", goal: "learn", issues: [], done: false },
+      focus: null, fl: {}, fhist: []
+    }
+  });
+  const normalizeState = s => {
+    const o = blank();
+    o.entries = s.entries || {}; o.caf = s.caf || {}; o.dels = s.dels || {};
+    if (s.meta) {
+      const m = s.meta;
+      o.meta.u = m.u || 0;
+      Object.assign(o.meta.settings, m.settings || {});
+      o.meta.room = m.room || {}; o.meta.exps = m.exps || [];
+      Object.assign(o.meta.profile, m.profile || {});
+      o.meta.focus = m.focus || null; o.meta.fl = m.fl || {}; o.meta.fhist = m.fhist || [];
+    }
+    return o;
+  };
+  const loadLocal = () => {
+    const s = store.get("lull.v2", null);
+    if (s && s.v === 2) return normalizeState(s);
+    const o = blank(), e1 = store.get("lull.entries", null), s1 = store.get("lull.settings", null), r1 = store.get("lull.room", null);
+    if (e1) Object.keys(e1).forEach(k => { o.entries[k] = Object.assign({ u: 1 }, e1[k]); });
+    if (s1) Object.assign(o.meta.settings, s1);
+    if (r1) o.meta.room = r1;
+    return o;
+  };
+  const mergeState = (a, b) => {
+    const o = blank();
+    ["entries", "caf"].forEach(f => {
+      const ks = {}; Object.keys(a[f]).concat(Object.keys(b[f])).forEach(k => { ks[k] = 1; });
+      Object.keys(ks).forEach(k => {
+        const x = a[f][k], y = b[f][k];
+        o[f][k] = !x ? y : !y ? x : ((y.u || 0) > (x.u || 0) ? y : x);
+      });
+    });
+    const dk = {}; Object.keys(a.dels).concat(Object.keys(b.dels)).forEach(k => { dk[k] = 1; });
+    Object.keys(dk).forEach(k => {
+      o.dels[k] = Math.max(a.dels[k] || 0, b.dels[k] || 0);
+      if (o.entries[k] && (o.entries[k].u || 0) <= o.dels[k]) delete o.entries[k];
+    });
+    o.meta = (b.meta.u || 0) > (a.meta.u || 0) ? b.meta : a.meta;
+    return o;
+  };
+
+  let S = loadLocal();
+  let cfg = S.meta.settings;
+  let ver = 1;
+  const rebind = () => { cfg = S.meta.settings; ver++; };
+  const touchMeta = () => { S.meta.u = Date.now(); };
+  const prof = () => S.meta.profile;
+
+  /* ---------- optional cloud sync through the db capability ---------- */
+  const sync = { ref: null, timer: null, busy: false };
+  const setSync = st => {
+    const p = $("#syncPill");
+    if (!sync.ref && st !== "error") { p.hidden = true; return; }
+    p.hidden = false;
+    p.textContent = st === "synced" ? "synced" : st === "saving" ? "saving" : "sync problem";
+    p.title = st === "error" ? "Your nights are saved on this device. Syncing to your account failed; it will retry on your next change." : "Your nights are also saved to your claude.ai account.";
+  };
+  const schedulePush = () => { if (!sync.ref) return; clearTimeout(sync.timer); setSync("saving"); sync.timer = setTimeout(push, 1500); };
+  async function push() {
+    if (sync.busy) { schedulePush(); return; }
+    sync.busy = true;
+    try { await sync.ref.set(JSON.parse(JSON.stringify(S))); setSync("synced"); } catch (e) { setSync("error"); }
+    sync.busy = false;
+  }
+  async function initSync() {
+    try {
+      const c = window.claude;
+      if (!c || !c.use) return;
+      const [db, user] = await Promise.all([c.use("db"), c.use("user")]);
+      if (!db || !user) return;
+      const uid = await user.id();
+      if (!uid) return;
+      sync.ref = db.collection("data/users/" + uid).doc("lull");
+      const snap = await sync.ref.get();
+      if (snap.exists) {
+        const remote = normalizeState(JSON.parse(JSON.stringify(snap.data())));
+        const merged = mergeState(S, remote);
+        const changed = JSON.stringify(merged) !== JSON.stringify(remote);
+        S = merged; rebind(); store.set("lull.v2", S);
+        if (current === "welcome" && prof().done) show("home"); else if (current !== "log" && current !== "welcome") rerender();
+        if (changed) await push(); else setSync("synced");
+      } else if (Object.keys(S.entries).length || Object.keys(S.caf).length || prof().done) await push();
+      else setSync("synced");
+      $("#footStore").textContent = "Your nights are saved in this browser and synced to your claude.ai account.";
+      renderDataNote();
+    } catch (e) { setSync("error"); }
+  }
+  function commit() { ver++; store.set("lull.v2", S); schedulePush(); }
+
+  /* ================= sleep maths ================= */
+  const calc = e => {
+    const bed = toMin(e.bed), wake = toMin(e.wake);
+    const inBed = (wake - bed + 1440) % 1440;
+    const asleep = Math.max(0, inBed - e.latency - e.awake);
+    return { inBed, asleep, eff: inBed ? asleep / inBed : 0, bedN: bed < 720 ? bed + 1440 : bed, wakeMin: wake, onset: wake - (inBed - e.latency) };
+  };
+  const decorate = (k, e) => { const o = Object.assign({ key: k, tags: [], latency: 15, awake: 0, quality: 3 }, e); o.c = calc(o); return o; };
+
+  function scoreNight(e, ctx) {
+    const need = cfg.need * 60, c = e.c;
+    const parts = [
+      { n: "Time asleep", max: 35, v: 35 * clamp(c.asleep / need, 0, 1) - (c.asleep > need + 120 ? 5 : 0) },
+      { n: "Time in bed spent asleep", max: 20, v: 20 * clamp((c.eff - 0.70) / 0.22, 0, 1) },
+      { n: "Falling asleep", max: 15, v: 15 * clamp(1 - (e.latency - 15) / 45, 0, 1) },
+      { n: "Night waking", max: 10, v: 10 * clamp(1 - (e.awake - 10) / 50, 0, 1) },
+      { n: "Regular times", max: 20, v: ctx ? 20 * clamp(1 - (Math.max(Math.abs(c.bedN - ctx.bed), circ(c.wakeMin, ctx.wake)) - 20) / 70, 0, 1) : 20 }
+    ];
+    parts.forEach(p => { p.v = Math.max(0, p.v); });
+    return { total: Math.round(parts.reduce((t, p) => t + p.v, 0)), parts, timing: !!ctx };
+  }
+  const withScores = list => {
+    const recent = list.slice(-21);
+    const ctx = list.length >= 4 ? { bed: median(recent.map(e => e.c.bedN)), wake: median(recent.map(e => e.c.wakeMin)) } : null;
+    list.forEach(e => { e.score = scoreNight(e, ctx); });
+    return list;
+  };
+  const scoreLabel = v => v >= 85 ? "Excellent" : v >= 70 ? "Good" : v >= 55 ? "Fair" : "Poor";
+
+  const sampleList = () => {
+    let s = 11; const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    const out = [], now = new Date();
+    for (let i = 21; i >= 1; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 12);
+      const weekend = d.getDay() === 0 || d.getDay() === 6;
+      const has = { caffeine: rnd() < 0.4, screens: rnd() < 0.55, alcohol: rnd() < 0.2, exercise: rnd() < 0.45, stress: rnd() < 0.3, lateMeal: rnd() < 0.2 };
+      const tags = Object.keys(has).filter(t => has[t]);
+      const bed = Math.round(((weekend ? 1455 : 1395) + (rnd() - 0.5) * 60) / 5) * 5;
+      const wake = Math.round(((weekend ? 510 : 405) + (rnd() - 0.5) * 20) / 5) * 5;
+      const latency = Math.round(12 + (has.caffeine ? 14 : 0) + (has.screens ? 8 : 0) + rnd() * 8);
+      const awake = Math.round(5 + (has.alcohol ? 25 : 0) + (has.stress ? 12 : 0) + rnd() * 10);
+      const quality = clamp(Math.round(4 - (has.caffeine ? 0.8 : 0) - (has.alcohol ? 1 : 0) - (has.stress ? 0.6 : 0) + (has.exercise ? 0.5 : 0) + (rnd() - 0.5)), 1, 5);
+      out.push(decorate(key(d), { bed: hhmm(bed), wake: hhmm(wake), latency, awake, quality, tags, note: "" }));
+    }
+    return out;
+  };
+  const SAMPLE = sampleList();
+
+  let cacheV = -1, cacheReal = [];
+  const realList = () => {
+    if (cacheV !== ver) { cacheReal = withScores(Object.keys(S.entries).sort().map(k => decorate(k, S.entries[k]))); cacheV = ver; }
+    return cacheReal;
+  };
+  let sampleScored = false;
+  const usingSample = () => Object.keys(S.entries).length === 0;
+  const dataList = () => { if (!usingSample()) return realList(); if (!sampleScored) { withScores(SAMPLE); sampleScored = true; } return SAMPLE; };
+
+  const summarize = list => {
+    const need = cfg.need * 60;
+    return {
+      n: list.length,
+      asleep: avg(list.map(e => e.c.asleep)),
+      eff: avg(list.map(e => e.c.eff)),
+      latency: avg(list.map(e => e.latency)),
+      awake: avg(list.map(e => e.awake)),
+      quality: avg(list.map(e => e.quality)),
+      score: avg(list.map(e => e.score ? e.score.total : 0)),
+      bedAvg: avg(list.map(e => e.c.bedN)),
+      bedSd: sd(list.map(e => e.c.bedN)),
+      wakeSd: sd(list.map(e => e.c.wakeMin)),
+      debt: list.reduce((t, e) => t + Math.max(0, need - e.c.asleep), 0)
+    };
+  };
+
+  /* Sleep Regularity Index: chance you are in the same state (asleep or awake) at the same clock time on consecutive days. */
+  const sri = list => {
+    const by = {}; list.forEach(e => { by[ord(e.key)] = e; });
+    let agree = 0, total = 0;
+    list.forEach(e => {
+      const n = by[ord(e.key) + 1]; if (!n) return;
+      for (let t = -360; t < 1080; t += 10) {
+        const a = t >= e.c.onset && t < e.c.wakeMin, b = t >= n.c.onset && t < n.c.wakeMin;
+        if (a === b) agree++; total++;
+      }
+    });
+    return total >= 3 * 144 ? Math.round(100 * (2 * agree / total - 1)) : null;
+  };
+
+  /* Chronotype from the midpoint of sleep on free days, corrected for sleep debt (Munich Chronotype method). */
+  const chrono = list => {
+    const free = cfg.free || [0, 6];
+    const mid = e => (e.c.onset + e.c.wakeMin) / 2;
+    const fr = list.filter(e => free.indexOf(fromKey(e.key).getDay()) >= 0), wk = list.filter(e => free.indexOf(fromKey(e.key).getDay()) < 0);
+    if (fr.length < 2 || wk.length < 3) return null;
+    const msf = avg(fr.map(mid)), msw = avg(wk.map(mid));
+    const sdf = avg(fr.map(e => e.c.asleep)), sdw = avg(wk.map(e => e.c.asleep));
+    const sdweek = (wk.length * sdw + fr.length * sdf) / (wk.length + fr.length);
+    const msfsc = sdf > sdw ? msf - 0.5 * (sdf - sdweek) : msf;
+    const need = cfg.need * 60;
+    const type = msfsc < 210 ? "an early type" : msfsc < 300 ? "somewhere in between" : "a late type (a night owl)";
+    return { msf, msw, msfsc, sjl: Math.abs(msf - msw), type, from: norm(msfsc - need / 2), to: norm(msfsc + need / 2), nFree: fr.length };
+  };
+
+  /* Seeded permutation test: how often a random split of the nights gives a gap this big. */
+  const permP = (a, b) => {
+    const obs = Math.abs(avg(a) - avg(b)), all = a.concat(b), n = a.length, N = 2000;
+    if (!n || !b.length) return 1;
+    let seed = 12345; const r = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    let cnt = 0;
+    for (let i = 0; i < N; i++) {
+      const x = all.slice();
+      for (let j = x.length - 1; j > 0; j--) { const k = Math.floor(r() * (j + 1)); const t = x[j]; x[j] = x[k]; x[k] = t; }
+      if (Math.abs(avg(x.slice(0, n)) - avg(x.slice(n))) >= obs - 1e-9) cnt++;
+    }
+    return (cnt + 1) / (N + 1);
+  };
+  const has = (e, t) => e.tags.indexOf(t) >= 0;
+
+  const tagEffects = list => TAGS.map(t => {
+    const w = list.filter(e => has(e, t.id)), wo = list.filter(e => !has(e, t.id));
+    const r = { tag: t, nw: w.length, nwo: wo.length, ok: w.length >= 3 && wo.length >= 3 };
+    if (!r.ok) return r;
+    const m = a => ({ q: avg(a.map(e => e.quality)), a: avg(a.map(e => e.c.asleep)), l: avg(a.map(e => e.latency)), s: avg(a.map(e => e.score.total)) });
+    r.w = m(w); r.wo = m(wo);
+    r.score = (r.w.q - r.wo.q) / 0.5 + (r.w.a - r.wo.a) / 20 - (r.w.l - r.wo.l) / 10;
+    r.verdict = r.score >= 1 ? "better" : r.score <= -1 ? "worse" : "flat";
+    r.p = permP(w.map(e => e.quality), wo.map(e => e.quality));
+    r.conf = r.p < 0.05 ? "Likely real" : r.p < 0.2 ? "Possible" : "Can't tell yet";
+    return r;
+  });
+
+  const pearson = (x, y) => {
+    const n = x.length; if (n < 6) return null;
+    const mx = avg(x), my = avg(y); let sxy = 0, sxx = 0, syy = 0;
+    for (let i = 0; i < n; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; }
+    return sxx && syy ? sxy / Math.sqrt(sxx * syy) : null;
+  };
+
+  const planBedtime = () => {
+    const real = realList().slice(-7);
+    const lat = real.length >= 3 ? clamp(Math.round(avg(real.map(e => e.latency))), 5, 45) : 15;
+    const wake = toMin(cfg.wake);
+    return { lat, bed: norm(wake - cfg.need * 60 - lat), wake, learned: real.length >= 3 };
+  };
+  const bedN = m => m < 720 ? m + 1440 : m;
+  const cafCutoff = () => norm(Math.floor((planBedtime().bed - 480) / 30) * 30);
+
+  /* ---------- two-process energy model ---------- */
+  function energyModel() {
+    const p = planBedtime(), wake = p.wake, bedx = ((p.bed - wake + 1440) % 1440) / 60;
+    const real = realList(), debtH = real.length >= 3 ? summarize(real.slice(-7)).debt / 60 : 0;
+    const s0 = 0.12 + clamp(debtH, 0, 10) * 0.012;
+    const pts = [];
+    for (let x = 0; x <= bedx + 0.5; x += 0.1) {
+      const S_ = 1 - (1 - s0) * Math.exp(-x / 18.2);
+      const C = 0.35 * Math.cos(2 * Math.PI * (x - 11) / 24) + 0.22 * Math.cos(2 * Math.PI * (x - 3.5) / 12) - 0.22 * Math.exp(-Math.pow((x - 7) / 1.3, 2));
+      const R = C - 0.7 * S_ - 0.9 * Math.exp(-x / 0.6) - 0.9 / (1 + Math.exp(-(x - (bedx - 2)) / 0.7));
+      pts.push([x, R]);
+    }
+    const mn = Math.min.apply(null, pts.map(a => a[1])), mx = Math.max.apply(null, pts.map(a => a[1]));
+    pts.forEach(a => { a[1] = 100 * (a[1] - mn) / (mx - mn); });
+    const best = (lo, hi, fn) => { const f = pts.filter(a => a[0] >= lo && a[0] <= hi); return f.length ? f.reduce((b, a) => fn(a[1], b[1]) ? a : b) : null; };
+    const peak = best(1.5, 7, (a, b) => a > b) || pts[Math.min(30, pts.length - 1)];
+    const dip = best(Math.min(5, bedx - 4), Math.min(11, bedx - 3), (a, b) => a < b) || peak;
+    const eve = bedx > 11 ? best(dip[0] + 1, bedx - 1.5, (a, b) => a > b) : null;
+    return { pts, wake, bedx, bed: p.bed, peak, dip, eve, debtH };
+  }
+
+  /* ---------- caffeine ---------- */
+  const cafDay = k => (S.caf[k] && S.caf[k].items) || [];
+  const cafAt = (items, m) => items.reduce((t, d) => m >= d.t ? t + d.mg * Math.pow(0.5, (m - d.t) / (cfg.half * 60)) : t, 0);
+  const CAF_TARGET = 25;
+
+  /* ---------- jet lag ---------- */
+  function jetPlan(east, hours, arrive, pre) {
+    const g0 = east ? hours : -hours;
+    const advDays = g0 > 0 ? g0 / 1 : (24 + g0) / 1, delDays = g0 > 0 ? (24 - g0) / 1.5 : (-g0) / 1.5;
+    const useAdv = advDays <= delDays;
+    const need = useAdv ? (g0 > 0 ? g0 : 24 + g0) : (g0 > 0 ? 24 - g0 : -g0);
+    const rate = useAdv ? 1 : 1.5;
+    const preN = Math.min(pre, Math.ceil(need / rate));
+    const preShift = Math.min(need, preN * rate);
+    const rem0 = need - preShift, days = Math.ceil(rem0 / rate);
+    const wake = toMin(cfg.wake), bed = planBedtime().bed, rows = [];
+    const sign = useAdv ? -1 : 1;
+    for (let i = -preN; i < 0; i++) {
+      const sh = rate * (preN + i + 1);
+      rows.push({ label: "Day " + i, date: addDays(arrive, i), wake: norm(wake + sign * sh * 60), bed: norm(bed + sign * sh * 60), clockNote: "home clock", off: need - sh, adv: useAdv, pre: true });
+    }
+    for (let k = 0; k <= days; k++) rows.push({ label: k === 0 ? "Arrival" : "Day " + k, date: addDays(arrive, k), wake, bed, clockNote: "local clock", off: Math.max(0, rem0 - rate * k), adv: useAdv, pre: false });
+    return { useAdv, need, rate, days, rows, wake, bed };
+  }
+
+  /* ================= personal focus ================= */
+  /* Each focus is one small habit for a week. Some are checked automatically from the night log; others you tick yourself. */
+  const FOCUS = {
+    wake: { title: () => "Wake at " + clock(toMin(cfg.wake)) + " every day", how: "Set one alarm and keep it on weekends too. A steady wake time is the strongest lever you have for sleep.", goals: { steady: 3, rested: 2, fall: 1, stay: 1, learn: 1 }, issues: { irregular: 3 }, auto: e => circ(e.c.wakeMin, toMin(cfg.wake)) <= 30, autoText: "wake time within 30 minutes of your target" },
+    bed: { title: () => "Be in bed by " + clock(planBedtime().bed), how: "This gives you the sleep you need before your alarm. Start your wind-down 45 minutes earlier.", goals: { rested: 3, stay: 1, learn: 1 }, issues: {}, auto: e => e.c.bedN <= bedN(planBedtime().bed) + 20, autoText: "in bed by your bedtime" },
+    caffeine: { title: () => "No caffeine after " + clock(cafCutoff()), how: "Caffeine stays in your body for many hours. Switch to decaf or herbal tea after this time.", goals: { fall: 3, stay: 2, rested: 1 }, issues: { caffeine: 3 }, auto: e => !has(e, "caffeine"), autoText: "no late caffeine" },
+    screens: { title: () => "Phone and TV off 1 hour before bed", how: "Charge your phone across the room. If you need something to do, read on paper or listen to quiet audio.", goals: { fall: 3, rested: 1 }, issues: { screens: 3 }, auto: e => !has(e, "screens"), autoText: "screens off before bed" },
+    wind: { title: () => "Do a 5-minute wind-down before bed", how: "Slow breathing or a short stretch tells your body the day is over. Lull has a guided exercise in Tools.", goals: { fall: 2, stay: 1, rested: 1 }, issues: { mind: 3 }, auto: null, autoText: "" },
+    light: { title: () => "Get 10 minutes of daylight after waking", how: "Go outside, or sit by a bright window. Morning light sets your body clock and makes you sleepy at the right time tonight.", goals: { rested: 3, steady: 2, fall: 1 }, issues: {}, auto: e => has(e, "daylight"), autoText: "morning daylight" },
+    alcohol: { title: () => "No alcohol within 3 hours of bed", how: "Alcohol helps you drop off but breaks up sleep later in the night.", goals: { stay: 3, rested: 1 }, issues: { alcohol: 3 }, auto: e => !has(e, "alcohol"), autoText: "no late alcohol" },
+    nap: { title: () => "Keep naps under 30 minutes, before 3 pm", how: "Long or late naps use up the sleepiness you need tonight.", goals: { fall: 1 }, issues: { nap: 3 }, auto: e => !has(e, "nap"), autoText: "no long or late naps" },
+    room: { title: () => "Cool, dark, quiet bedroom (about " + temp() + ")", how: "Open a window or lower the heating, close the curtains, and try white noise or earplugs.", goals: { stay: 3, fall: 1, rested: 1 }, issues: { room: 3 }, auto: null, autoText: "" },
+    meal: { title: () => "Finish dinner 3 hours before bed", how: "A big meal close to bed keeps your body busy. A light snack is fine.", goals: { stay: 1, fall: 1 }, issues: { meal: 3 }, auto: e => !has(e, "lateMeal"), autoText: "no late big meal" }
+  };
+  const FOCUS_TAG = { caffeine: "caffeine", screens: "screens", alcohol: "alcohol", nap: "nap", meal: "lateMeal", light: "daylight" };
+
+  function focusCandidates(exclude) {
+    const real = realList(), recent = real.slice(-21), p = prof(), out = [];
+    const S_ = recent.length >= 5 ? summarize(recent.slice(-14)) : null;
+    const fx = recent.length >= 6 ? tagEffects(recent) : [];
+    Object.keys(FOCUS).forEach(id => {
+      if (exclude && exclude.indexOf(id) >= 0) return;
+      const d = FOCUS[id];
+      let score = (d.goals[p.goal] != null ? d.goals[p.goal] : 0.5), reason = "", ev = 0;
+      const issueHit = (p.issues || []).filter(i => d.issues[i]);
+      issueHit.forEach(i => { score += d.issues[i]; });
+      if (S_) {
+        if (id === "wake" && (S_.wakeSd > 45)) { ev = 1; reason = "Your wake time moves around by about " + Math.round(S_.wakeSd) + " minutes."; }
+        else if (id === "bed" && S_.asleep < cfg.need * 60 - 30) { ev = 1; reason = "You're averaging " + dur(S_.asleep) + " against your " + cfg.need + " h goal."; }
+        else if (id === "caffeine" && S_.latency > 25) { ev = 0.6; reason = "It takes you about " + Math.round(S_.latency) + " minutes to fall asleep."; }
+        else if (id === "wind" && S_.latency > 25) { ev = 0.5; reason = "It takes you about " + Math.round(S_.latency) + " minutes to fall asleep."; }
+        else if (id === "alcohol" && S_.awake > 30) { ev = 0.4; reason = "You're awake about " + Math.round(S_.awake) + " minutes in the night."; }
+        const t = FOCUS_TAG[id], r = t && fx.filter(x => x.tag.id === t)[0];
+        if (r && r.ok) {
+          const bad = r.tag.kind === "bad" && r.verdict === "worse", good = r.tag.kind === "good" && r.verdict === "better";
+          if (bad || good) {
+            ev = Math.max(ev, r.conf === "Likely real" ? 1.2 : r.conf === "Possible" ? 0.8 : 0.4);
+            reason = bad ? "Nights after \"" + r.tag.label.toLowerCase() + "\" were worse for you (" + r.nw + " nights)." : "Your nights with \"" + r.tag.label.toLowerCase() + "\" were better (" + r.nw + " nights).";
+          }
+        }
+        score += 3 * ev;
+      }
+      if (!reason) reason = issueHit.length ? "You mentioned " + ISSUE_SHORT[issueHit[0]] + "." : "A good match for your goal: " + GOALS.filter(g => g[0] === p.goal)[0][1].toLowerCase() + ".";
+      const hist = S.meta.fhist.filter(h => h.id === id).slice(-1)[0];
+      if (hist && ord(today()) - ord(hist.start) < 28) score -= 2.5;
+      out.push({ id, score, reason });
+    });
+    return out.sort((a, b) => b.score - a.score);
+  }
+  function startFocus(id, reason) {
+    const real = realList();
+    S.meta.focus = { id, start: today(), reason: reason || "", baseline: real.slice(-7).map(e => e.key) };
+    touchMeta(); commit();
+  }
+  function ensureFocus() {
+    const f = S.meta.focus;
+    if (f && FOCUS[f.id]) return f;
+    const c = focusCandidates()[0];
+    startFocus(c.id, c.reason);
+    return S.meta.focus;
+  }
+  function focusDots(f) {
+    const def = FOCUS[f.id], real = realList(), by = {}; real.forEach(e => { by[e.key] = e; });
+    const dots = []; let ok = 0, logged = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(f.start, i);
+      let st = "";
+      if (def.auto) {
+        const e = by[addDays(d, 1)];
+        if (e) { logged++; st = def.auto(e, f) ? "ok" : "miss"; if (st === "ok") ok++; }
+      } else if (S.meta.fl[f.id + "|" + d]) { st = "ok"; ok++; logged++; }
+      else if (d < today()) { st = "miss"; logged++; }
+      dots.push({ d, st });
+    }
+    return { dots, ok, logged };
+  }
+  const expMetrics = l => ({ n: l.length, score: avg(l.map(e => e.score.total)), asleep: avg(l.map(e => e.c.asleep)), lat: avg(l.map(e => e.latency)), q: avg(l.map(e => e.quality)) });
+  function focusResult(f) {
+    const real = realList();
+    const base = (f.baseline || []).map(k => real.filter(e => e.key === k)[0]).filter(Boolean);
+    const trial = real.filter(e => e.key > f.start && e.key <= addDays(f.start, 7));
+    return { base, trial, mb: expMetrics(base), mt: expMetrics(trial), p: base.length >= 3 && trial.length >= 3 ? permP(base.map(e => e.score.total), trial.map(e => e.score.total)) : null };
+  }
+
+  /* ================= navigation ================= */
+  const MAIN = ["home", "insights", "tools", "me"];
+  const VIEWS = MAIN.concat(["welcome", "log"]);
+  let current = "home", lastMain = "home";
+  function show(tab) {
+    if (VIEWS.indexOf(tab) < 0) tab = "home";
+    if (tab === "home" && needsWelcome()) tab = "welcome";
+    current = tab;
+    if (MAIN.indexOf(tab) >= 0) lastMain = tab;
+    VIEWS.forEach(t => { $("#v-" + t).hidden = t !== tab; });
+    $(".tabs").hidden = tab === "welcome";
+    $("#logBtn").hidden = tab === "welcome" || tab === "log";
+    $$(".tabs button").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+    rerender();
+    try { history.replaceState(null, "", "#" + tab); } catch (e) {}
+    window.scrollTo(0, 0);
+  }
+  const needsWelcome = () => !prof().done && Object.keys(S.entries).length === 0;
+  function rerender() {
+    $("#sampleBanner").hidden = !(usingSample() && current === "insights");
+    ({ welcome: renderWelcome, home: renderHome, log: renderLogView, insights: renderInsights, tools: renderTools, me: renderMe }[current])();
+  }
+
+  /* ================= welcome ================= */
+  let onb = { step: 0, name: "", goal: "learn", wake: "07:00", need: 8, issues: [] };
+  function renderWelcome() {
+    const el = $("#welcome"), steps = 4;
+    const dots = '<div class="steps-dots" aria-hidden="true">' + [0, 1, 2, 3].map(i => '<i class="' + (i <= onb.step ? "on" : "") + '"></i>').join("") + "</div>";
+    let body = "";
+    if (onb.step === 0) {
+      body = "<h1>Let's get you sleeping better</h1><p class=\"soft\">Four quick questions so Lull can fit you. You can change any answer later.</p>" +
+        '<label class="field" for="onName">What should I call you? (optional)<input type="text" id="onName" maxlength="30" value="' + esc(onb.name) + '"></label>' +
+        '<fieldset><legend>What would you most like to change?</legend><div class="choices">' + GOALS.map(g => '<button type="button" class="choice" data-goal="' + g[0] + '" aria-pressed="' + (onb.goal === g[0]) + '">' + g[1] + "</button>").join("") + "</div></fieldset>";
+    } else if (onb.step === 1) {
+      body = "<h1>Your schedule</h1><p class=\"soft\">Lull works out your bedtime from these two answers.</p>" +
+        '<label class="field" for="onWake">When do you need to wake up?<input type="time" id="onWake" value="' + onb.wake + '"></label>' +
+        '<fieldset><legend>How much sleep do you need?</legend><div class="seg" id="onNeed">' + [7, 7.5, 8, 8.5, 9].map(n => '<label><input type="radio" name="onneed" value="' + n + '"' + (onb.need === n ? " checked" : "") + "><span>" + n + " h</span></label>").join("") + '</div><p class="small soft">Most adults need 7 to 9 hours. Not sure? Keep 8. Lull learns your real need from your nights.</p></fieldset>';
+    } else if (onb.step === 2) {
+      body = "<h1>Does any of this sound like you?</h1><p class=\"soft\">Tick anything that applies. It helps pick your first habit.</p>" +
+        '<div class="choices">' + ISSUES.map(i => '<button type="button" class="choice" data-issue="' + i[0] + '" aria-pressed="' + (onb.issues.indexOf(i[0]) >= 0) + '">' + i[1] + "</button>").join("") + "</div>";
+    } else {
+      applyOnboarding();
+      const f = S.meta.focus, def = FOCUS[f.id], p = planBedtime();
+      body = "<h1>" + (onb.name ? esc(onb.name) + ", you" : "You") + "'re set</h1>" +
+        '<div class="fact"><span class="eyebrow">Your bedtime</span><span class="v">' + clock(p.bed) + '</span><span class="small soft">To wake at ' + clock(p.wake) + " with " + cfg.need + " hours of sleep.</span></div>" +
+        '<div class="fact"><span class="eyebrow">Your first habit</span><span class="v">' + esc(def.title()) + '</span><span class="small soft">' + esc(f.reason) + " " + esc(def.how) + "</span></div>" +
+        '<p class="small soft">Log each morning (about 20 seconds). After a few nights Lull starts finding your patterns.</p>';
+    }
+    const nav = '<div class="btn-row">' + (onb.step > 0 && onb.step < 3 ? '<button type="button" class="btn ghost" data-onb="back">Back</button>' : "") +
+      (onb.step < 3 ? '<button type="button" class="btn" data-onb="next">Next</button>' : '<button type="button" class="btn wide" data-onb="finish">Take me to Lull</button>') + "</div>" +
+      (onb.step < 3 ? '<button type="button" class="link" data-onb="skip" style="align-self:flex-start">Skip setup</button>' : "");
+    el.innerHTML = dots + body + nav;
+  }
+  function applyOnboarding() {
+    const p = prof();
+    p.name = onb.name.trim(); p.goal = onb.goal; p.issues = onb.issues.slice(); p.done = true;
+    cfg.wake = onb.wake; cfg.need = onb.need;
+    S.meta.focus = null; touchMeta(); commit();
+    const c = focusCandidates()[0]; startFocus(c.id, c.reason);
+  }
+
+  /* ================= home ================= */
+  const hello = () => { const h = new Date().getHours(); return h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; };
+  function streak() {
+    let n = 0, k = S.entries[today()] ? today() : addDays(today(), -1);
+    while (S.entries[k]) { n++; k = addDays(k, -1); }
+    return n;
+  }
+  function renderHome() {
+    const p = prof(), real = realList(), todayE = real.filter(e => e.key === today())[0], morning = nowMin() < 15 * 60;
+    const name = p.name ? ", " + esc(p.name) : "";
+    const st = streak();
+    let line;
+    if (todayE) line = "You slept " + dur(todayE.c.asleep) + " last night.";
+    else if (!real.length) line = "Log last night to get started. It takes about 20 seconds.";
+    else line = morning ? "Let's log last night." : "Aim for " + clock(planBedtime().bed) + " tonight.";
+    $("#hello").innerHTML = "<h1>" + hello() + name + "</h1><p class=\"soft\">" + line + (st >= 2 ? " <span class=\"pill good\">" + st + " nights in a row</span>" : "") + "</p>";
+    $("#cPersonalize").hidden = prof().done;
+    renderQuick(todayE); renderTonight(); renderFocus(); renderKey();
+    /* order: log first in the morning, tonight first later */
+    $("#cQuick").style.order = morning || !todayE ? (morning ? 1 : 3) : 3;
+    $("#cTonight").style.order = morning ? 2 : 1;
+    $("#cFocus").style.order = 4; $("#cKey").style.order = 5; $("#cPersonalize").style.order = 0;
+    $("#cQuick").classList.toggle("lead", morning && !todayE);
+    $("#cTonight").classList.toggle("lead", !(morning && !todayE));
+  }
+
+  /* ---- quick log ---- */
+  function relevantTags() {
+    const p = prof(), out = [], f = S.meta.focus;
+    if (f && FOCUS_TAG[f.id]) out.push(FOCUS_TAG[f.id]);
+    (p.issues || []).forEach(i => { if (ISSUE_TAG[i]) out.push(ISSUE_TAG[i]); });
+    ["caffeine", "screens", "exercise", "alcohol"].forEach(t => out.push(t));
+    return out.filter((t, i) => out.indexOf(t) === i).slice(0, 4);
+  }
+  function defaults() {
+    const all = realList(), free = (cfg.free || []).indexOf(new Date().getDay()) >= 0;
+    const same = all.filter(e => ((cfg.free || []).indexOf(fromKey(e.key).getDay()) >= 0) === free).slice(-7);
+    const last = all.slice(-7), typ = same.length >= 2 ? same : last;
+    return {
+      bed: typ.length ? hhmm(median(typ.map(e => e.c.bedN))) : hhmm(planBedtime().bed),
+      wake: same.length >= 2 ? hhmm(median(same.map(e => e.c.wakeMin))) : cfg.wake,
+      latency: last.length >= 3 ? clamp(Math.round(avg(last.map(e => e.latency))), 0, 90) : 15,
+      awake: last.length >= 3 ? clamp(Math.round(avg(last.map(e => e.awake))), 0, 120) : 0
+    };
+  }
+  function renderQuick(todayE) {
+    const el = $("#cQuick");
+    if (todayE) {
+      const sc = todayE.score;
+      el.innerHTML = '<header><h2>Last night</h2><button type="button" class="link" data-quickedit>Edit</button></header><div class="sumrow"><div class="ring">' + ringSvg(sc.total, sc.total >= 70 ? "var(--accent)" : "var(--dawn)") + '<div class="val"><span>' + sc.total + "<small>" + scoreLabel(sc.total) + '</small></span></div></div><div><p><strong>' + dur(todayE.c.asleep) + '</strong> asleep</p><p class="soft small">' + clock(toMin(todayE.bed)) + " to " + clock(toMin(todayE.wake)) + " · felt " + QUALITY[todayE.quality - 1].toLowerCase() + "</p>" + weakestLine(sc) + "</div></div>";
+      return;
+    }
+    const d = defaults(), tags = relevantTags(), auto = cafHint(today());
+    el.innerHTML = "<header><h2>How did you sleep?</h2><span class=\"small soft\">" + esc(fmtDate(today())) + "</span></header>" +
+      '<div class="row"><label class="field" for="qBed">Went to bed<input type="time" id="qBed" value="' + d.bed + '"></label><label class="field" for="qWake">Woke up<input type="time" id="qWake" value="' + d.wake + '"></label></div>' +
+      '<fieldset><legend>How rested do you feel?</legend><div class="rate">' + QUALITY.map((q, i) => '<label><input type="radio" name="qq" value="' + (i + 1) + '"' + (i === 2 ? " checked" : "") + "><span><b>" + (i + 1) + "</b>" + q + "</span></label>").join("") + "</div></fieldset>" +
+      '<fieldset><legend>Yesterday I had (optional)</legend><div class="chips">' + tags.map(t => '<button type="button" class="chip-t" data-qtag="' + t + '" aria-pressed="' + (t === "caffeine" && auto) + '">' + esc(tagById(t).short) + "</button>").join("") + "</div></fieldset>" +
+      '<div class="btn-row"><button type="button" class="btn" id="qSave">Save</button><button type="button" class="link" id="qMore">Add details</button><span class="msg" id="qMsg" role="status"></span></div>';
+  }
+  function weakestLine(sc) {
+    const w = sc.parts.slice().sort((a, b) => (a.v / a.max) - (b.v / b.max))[0];
+    return '<p class="small">' + (w.v / w.max < 0.85 ? "Biggest gap: " + w.n.toLowerCase() + "." : "Nothing stood out as a problem.") + "</p>";
+  }
+  function ringSvg(v, color) {
+    const r = 52, c = 2 * Math.PI * r;
+    return '<svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="' + r + '" fill="none" stroke="var(--surface-2)" stroke-width="10"/><circle cx="60" cy="60" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="10" stroke-linecap="round" stroke-dasharray="' + (c * v / 100).toFixed(1) + " " + c.toFixed(1) + '"/></svg>';
+  }
+  function saveQuick() {
+    const msg = $("#qMsg"), d = defaults();
+    const f = { date: today(), bed: $("#qBed").value, wake: $("#qWake").value, latency: d.latency, awake: d.awake, quality: +($("#cQuick input[name=qq]:checked") || { value: 3 }).value, tags: $$("#cQuick [data-qtag][aria-pressed=true]").map(b => b.dataset.qtag), note: "" };
+    const err = validate(f);
+    if (err) { say(msg, err, "err"); return; }
+    if (S.entries[f.date] && S.entries[f.date].note) f.note = S.entries[f.date].note;
+    S.entries[f.date] = { bed: f.bed, wake: f.wake, latency: f.latency, awake: f.awake, quality: f.quality, tags: f.tags, note: f.note, u: Date.now() };
+    commit(); renderHome();
+  }
+
+  /* ---- tonight ---- */
+  function renderTonight() {
+    const p = planBedtime(), B = p.bed;
+    const steps = [[B - 480, "Last caffeine"], [B - 180, "Finish big meals and alcohol"], [B - 60, "Screens down, lights low"], [B - 45, "Start winding down"], [B - 15, "Set the room"], [B, "In bed, lights out"]];
+    const nm = nowMin();
+    const next = steps.filter(s => (nm - norm(s[0]) + 1440) % 1440 >= 720).sort((a, b) => ((norm(a[0]) - nm + 1440) % 1440) - ((norm(b[0]) - nm + 1440) % 1440))[0];
+    $("#cTonight").innerHTML = '<p class="eyebrow">Tonight, be in bed by</p><p class="bigtime" aria-live="polite">' + clock(B) + '</p><p class="count" id="bedCount"></p>' +
+      '<p class="soft">To wake at ' + clock(p.wake) + " after " + cfg.need + " h of sleep, allowing about " + p.lat + " min to fall asleep" + (p.learned ? " (from your recent nights)." : ".") + "</p>" +
+      (next ? '<p><span class="eyebrow">Next</span><br><strong>' + clock(next[0]) + "</strong> " + esc(next[1]) + "</p>" : "") +
+      '<div class="btn-row"><button type="button" class="btn ghost small" data-goto="calm">Wind-down tools</button><button type="button" class="link" data-goto="steps">See tonight\'s steps</button></div>' +
+      '<ol class="steps" id="stepsList" hidden style="margin-top:4px">' + steps.map(s => "<li><strong>" + clock(s[0]) + "</strong> " + esc(s[1]) + "</li>").join("") + "</ol>";
+    tickCountdown();
+  }
+  function tickCountdown() {
+    const el = $("#bedCount"); if (!el || current !== "home") return;
+    const p = planBedtime(), diff = (p.bed - nowMin() + 1440) % 1440, ago = 1440 - diff;
+    if (diff === 0) el.textContent = "That's right now.";
+    else if (ago < 180) el.textContent = "Bedtime passed " + dur(ago) + " ago. Start winding down now.";
+    else el.textContent = "in " + dur(diff);
+  }
+
+  /* ---- focus ---- */
+  function renderFocus() {
+    const f = ensureFocus(), def = FOCUS[f.id], el = $("#cFocus");
+    const done = today() >= addDays(f.start, 8) || (today() >= addDays(f.start, 7) && realList().some(e => e.key >= addDays(f.start, 7)));
+    const { dots, ok, logged } = focusDots(f);
+    if (done) {
+      const r = focusResult(f), d = r.mt.score - r.mb.score;
+      const comp = r.base.length >= 3 && r.trial.length >= 3
+        ? "Your sleep score averaged " + Math.round(r.mt.score) + " this week against " + Math.round(r.mb.score) + " the week before" + (Math.abs(d) < 3 ? ": about the same." : d > 0 ? ": better. Worth keeping." : ": lower. This habit may not be your lever.") + (r.p != null && r.p >= 0.2 ? " A single week is short, so treat this as a hint." : "")
+        : "Log more nights to see how this week compared.";
+      el.innerHTML = '<p class="eyebrow">Week complete</p><h2>' + esc(def.title()) + '</h2><p>You did this on <strong>' + ok + " of 7</strong> evenings.</p><p class=\"soft\">" + esc(comp) + '</p><div class="btn-row"><button type="button" class="btn" data-focus="next">Choose my next habit</button><button type="button" class="btn ghost" data-focus="again">Keep this one</button></div>';
+      return;
+    }
+    const todayD = today(), idx = ord(todayD) - ord(f.start);
+    const manualTodayDone = !def.auto && S.meta.fl[f.id + "|" + todayD];
+    el.innerHTML = '<p class="eyebrow">This week\'s habit</p><h2>' + esc(def.title()) + '</h2><p class="soft">' + esc(def.how) + '</p>' +
+      '<div class="dots" aria-label="Seven evenings">' + dots.map((x, i) => '<i class="' + x.st + (i === idx ? " now" : "") + '" title="' + esc(fmtDate(x.d)) + '"></i>').join("") + "</div>" +
+      '<p class="small soft">' + (ok ? ok + " of 7 evenings so far. " : "") + (def.auto ? "Checked from your morning log (" + def.autoText + ")." : "You tick this one yourself each evening.") + "</p>" +
+      (def.auto ? "" : '<div><button type="button" class="btn ' + (manualTodayDone ? "ghost" : "") + '" data-focus="tick">' + (manualTodayDone ? "Done tonight. Undo" : "I did this tonight") + "</button></div>") +
+      '<details><summary>Why this one</summary><p class="soft">' + esc(f.reason) + '</p><p class="small soft" style="margin-top:8px">Pick a different habit:</p><div class="chips" style="margin-top:8px">' + focusCandidates().filter(c => c.id !== f.id).slice(0, 4).map(c => '<button type="button" class="chip-t" data-focuspick="' + c.id + '">' + esc(FOCUS[c.id].title()) + "</button>").join("") + "</div></details>";
+  }
+
+  /* ---- key number ---- */
+  const KEYS = {
+    fall: { label: "Time to fall asleep", get: e => e.latency, fmt: v => Math.round(v) + " min", low: true, good: v => v <= 20 },
+    stay: { label: "Awake during the night", get: e => e.awake, fmt: v => Math.round(v) + " min", low: true, good: v => v <= 15 },
+    rested: { label: "How rested you feel", get: e => e.quality, fmt: v => v.toFixed(1) + " / 5", low: false, good: v => v >= 3.8 },
+    steady: { label: "Distance from your wake time", get: e => circ(e.c.wakeMin, toMin(cfg.wake)), fmt: v => Math.round(v) + " min", low: true, good: v => v <= 30 },
+    learn: { label: "Sleep score", get: e => e.score.total, fmt: v => Math.round(v) + " / 100", low: false, good: v => v >= 70 }
+  };
+  function renderKey() {
+    const el = $("#cKey"), real = realList(), K = KEYS[prof().goal] || KEYS.learn;
+    if (real.length < 3) {
+      el.innerHTML = "<h2>" + K.label + "</h2><p class=\"soft\">Log " + (3 - real.length) + " more night" + (3 - real.length === 1 ? "" : "s") + " and Lull will show how this is changing.</p>";
+      return;
+    }
+    const last7 = real.slice(-7), prev = real.slice(-14, -7);
+    const a = avg(last7.map(K.get)), b = prev.length >= 3 ? avg(prev.map(K.get)) : null;
+    let pill = "";
+    if (b != null) {
+      const diff = a - b, tiny = Math.abs(diff) < Math.max(0.05 * Math.abs(b), K.low ? 2 : 0.1), better = K.low ? diff < 0 : diff > 0;
+      pill = tiny ? '<span class="pill flat">Steady</span>' : better ? '<span class="pill good">Improving</span>' : '<span class="pill bad">Slipping</span>';
+      pill += ' <span class="small soft">was ' + K.fmt(b) + " the week before</span>";
+    } else pill = '<span class="small soft">From your last ' + last7.length + " nights</span>";
+    el.innerHTML = '<header><h2>' + K.label + '</h2><span class="eyebrow">Last 7 nights</span></header><div class="sumrow"><span class="keyv">' + K.fmt(a) + "</span><div>" + pill + '</div></div><div class="chart" id="chartKey"></div>';
+    drawKey(real.slice(-14), K);
+  }
+  function drawKey(list, K) {
+    const g = $("#chartKey"); if (!g || list.length < 2) return;
+    const W = Math.max(240, g.clientWidth || 300), H = 70, vals = list.map(K.get), lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), span = hi - lo || 1;
+    const X = i => 6 + i / (list.length - 1) * (W - 12), Y = v => H - 8 - (v - lo) / span * (H - 16);
+    const svg = mk("svg", { width: W, height: H, role: "img", "aria-label": K.label + " over your last " + list.length + " nights" });
+    const d = "M" + vals.map((v, i) => X(i).toFixed(1) + "," + Y(v).toFixed(1)).join("L");
+    svg.appendChild(mk("path", { d: d + "L" + X(list.length - 1) + "," + H + "L" + X(0) + "," + H + "Z", fill: "var(--accent)", opacity: 0.14 }));
+    svg.appendChild(mk("path", { d, fill: "none", stroke: "var(--accent)", "stroke-width": 2.5, "stroke-linejoin": "round" }));
+    svg.appendChild(mk("circle", { cx: X(list.length - 1), cy: Y(vals[vals.length - 1]), r: 4.5, fill: "var(--accent)" }));
+    g.innerHTML = ""; g.appendChild(svg);
+  }
+
+  /* ================= log view ================= */
+  function buildForm() {
+    $("#fQual").innerHTML = QUALITY.map((q, i) => '<label><input type="radio" name="qual" value="' + (i + 1) + '"' + (i === 2 ? " checked" : "") + "><span><b>" + (i + 1) + "</b>" + q + "</span></label>").join("");
+    $("#fTags").innerHTML = TAGS.map(t => '<label><input type="checkbox" name="tag" value="' + t.id + '">' + esc(t.label) + "</label>").join("");
+  }
+  function readForm() {
+    return {
+      date: $("#fDate").value, bed: $("#fBed").value, wake: $("#fWake").value,
+      latency: clamp(parseInt($("#fLat").value, 10) || 0, 0, 240), awake: clamp(parseInt($("#fAwake").value, 10) || 0, 0, 480),
+      quality: +($("#fQual input:checked") || { value: 3 }).value,
+      tags: $$("#fTags input:checked").map(i => i.value), note: $("#fNote").value.trim()
+    };
+  }
+  function validate(f) {
+    if (!f.date) return "Choose the morning you woke up.";
+    if (!TIME_RE.test(f.bed) || !TIME_RE.test(f.wake)) return "Enter both times.";
+    const inBed = calc(Object.assign({ latency: 0, awake: 0 }, f)).inBed;
+    if (inBed < 60 || inBed > 16 * 60) return "That's " + dur(inBed) + " in bed. Check that bed and wake times are the right way round.";
+    if (f.latency + f.awake >= inBed) return "Time awake can't be longer than time in bed.";
+    return "";
+  }
+  function updatePreview() {
+    const f = readForm(), err = validate(f), el = $("#fPreview");
+    if (err) { el.textContent = err; return; }
+    const c = calc(f);
+    el.textContent = "In bed " + dur(c.inBed) + " · asleep " + dur(c.asleep) + " · " + Math.round(c.eff * 100) + "% of the time in bed";
+  }
+  let editingKey = null;
+  const cafHint = k => cafDay(addDays(k, -1)).some(d => d.t >= 840);
+  function fillForm(k, over) {
+    const e = S.entries[k], d = defaults();
+    editingKey = e ? k : null;
+    $("#fDate").value = k;
+    $("#fBed").value = e ? e.bed : (over && over.bed) || d.bed;
+    $("#fWake").value = e ? e.wake : (over && over.wake) || d.wake;
+    $("#fLat").value = e ? e.latency : d.latency;
+    $("#fAwake").value = e ? e.awake : d.awake;
+    $("#fNote").value = e ? e.note || "" : "";
+    const q = e ? e.quality : (over && over.quality) || 3;
+    $$("#fQual input").forEach(i => { i.checked = +i.value === q; });
+    const auto = !e && cafHint(k), pre = (over && over.tags) || [];
+    $$("#fTags input").forEach(i => { i.checked = e ? e.tags.indexOf(i.value) >= 0 : (pre.indexOf(i.value) >= 0 || (auto && i.value === "caffeine")); });
+    $("#fTagHint").textContent = auto ? "Caffeine after 2 pm is pre-ticked from your caffeine log." : "";
+    $("#formTitle").textContent = e ? "Edit " + fmtDate(k) : "Log a night";
+    $("#fSave").textContent = e ? "Update night" : "Save night";
+    say($("#fMsg"), "", "");
+    updatePreview();
+  }
+  function renderLogView() { /* form is filled by whoever opens the view */ }
+  function openLog(k, over) { show("log"); fillForm(k || today(), over); }
+
+  /* ================= insights ================= */
+  let metric = "score", range = 14;
+  function plainSummary(list) {
+    const items = [], n7 = list.slice(-7), s = summarize(n7), need = cfg.need * 60, g = prof().goal;
+    if (!n7.length) return [{ k: "x", t: "Log a night and Lull will describe your sleep here in plain words." }];
+    items.push({ k: "rested", t: s.asleep >= need - 15 ? "You're sleeping about " + dur(s.asleep) + " a night, right on your " + cfg.need + " h goal." : "You're sleeping about " + dur(s.asleep) + " a night, " + dur(need - s.asleep) + " short of your " + cfg.need + " h goal." });
+    if (s.latency > 25) items.push({ k: "fall", t: "It takes you about " + Math.round(s.latency) + " minutes to fall asleep. Under 20 is typical." });
+    else if (s.latency <= 15) items.push({ k: "fall", t: "You fall asleep quickly, in about " + Math.round(s.latency) + " minutes." });
+    if (s.awake > 25) items.push({ k: "stay", t: "You're awake about " + Math.round(s.awake) + " minutes during the night." });
+    if (s.wakeSd > 45) items.push({ k: "steady", t: "Your wake time varies by about " + Math.round(s.wakeSd) + " minutes. A steadier time would help most." });
+    else if (n7.length >= 4) items.push({ k: "steady", t: "Your wake time is steady, within about " + Math.round(s.wakeSd) + " minutes." });
+    if (s.debt > 180) items.push({ k: "rested", t: "You've built up about " + dur(s.debt) + " of sleep debt this week." });
+    tagEffects(list.slice(-30)).filter(r => r.ok && r.verdict !== "flat" && r.conf !== "Can't tell yet").forEach(r => {
+      if (r.tag.kind === "bad" && r.verdict === "worse") items.push({ k: "habit", t: "\"" + r.tag.label + "\" goes with worse nights for you (" + r.conf.toLowerCase() + ")." });
+      if (r.tag.kind === "good" && r.verdict === "better") items.push({ k: "habit", t: "\"" + r.tag.label + "\" goes with better nights for you (" + r.conf.toLowerCase() + ")." });
+    });
+    items.sort((a, b) => (b.k === g ? 1 : 0) - (a.k === g ? 1 : 0));
+    return items.slice(0, 5);
+  }
+  function renderInsights() {
+    const all = dataList();
+    $("#sumNote").textContent = usingSample() ? "Example data" : "Last 7 nights";
+    $("#inSummary").innerHTML = plainSummary(all).map(x => "<li>" + esc(x.t) + "</li>").join("");
+    renderCoach();
+    $("#metSeg").innerHTML = [["score", "Score"], ["hours", "Length"], ["times", "Bed and wake"]].map(m => '<label><input type="radio" name="met" value="' + m[0] + '"' + (metric === m[0] ? " checked" : "") + "><span>" + m[1] + "</span></label>").join("");
+    $("#rangeSeg").innerHTML = [7, 14, 30].map(n => '<label><input type="radio" name="range" value="' + n + '"' + (n === range ? " checked" : "") + "><span>" + n + " nights</span></label>").join("");
+    drawMain();
+    renderHabits(all); renderClock(all); renderWeek(all); renderIdeas();
+  }
+  function drawMain() {
+    const all = dataList(), g = $("#chartMain"), list = all.slice(-range);
+    g.innerHTML = "";
+    if (!list.length) { g.innerHTML = '<p class="soft">Log a night to see your chart.</p>'; return; }
+    const lg = $("#chartLegend");
+    if (metric === "score") { drawScore(g, list); lg.innerHTML = "<span>Out of 100. Higher is better.</span>"; }
+    else if (metric === "hours") { drawHours(g, list); lg.innerHTML = '<span><i style="background:var(--accent)"></i>Met your goal</span><span><i style="background:var(--dawn)"></i>Short of your goal</span><span><i style="background:none;border-top:2px dashed var(--ink-soft);height:0;border-radius:0;vertical-align:3px"></i>Goal</span>'; }
+    else { drawTimeline(g, list); lg.innerHTML = '<span><i style="background:var(--accent-soft)"></i>In bed, awake</span><span><i style="background:var(--accent)"></i>Asleep until waking</span>'; }
+  }
+  function renderHabits(all) {
+    const list = all.slice(-30), fx = tagEffects(list);
+    $("#effNote").textContent = list.length < 6 ? "Lull needs about 6 nights, with each habit both present and absent on at least 3 of them." : "Compared across your last " + list.length + " nights. These are patterns, not proof.";
+    const found = fx.filter(r => r.ok && r.verdict !== "flat" && r.conf !== "Can't tell yet").sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
+    $("#effList").innerHTML = found.length ? found.map(r => {
+      const helps = (r.tag.kind === "good") === (r.verdict === "better") ? r.verdict === "better" : r.verdict === "better";
+      const good = r.verdict === "better";
+      return '<li><span><strong>' + esc(r.tag.label) + '</strong><br><span class="small soft">' + (good ? "Better nights" : "Worse nights") + ": rested " + r.w.q.toFixed(1) + " vs " + r.wo.q.toFixed(1) + ", " + Math.round(r.w.l) + " vs " + Math.round(r.wo.l) + ' min to fall asleep</span></span><span><span class="pill ' + (good ? "good" : "bad") + '">' + (good ? "Helps" : "Hurts") + '</span> <span class="small soft">' + r.conf + "</span></span></li>";
+    }).join("") : (list.length >= 6 ? '<li><span class="soft">No habit clearly stands out yet. Keep logging, or open the numbers below to see every habit.</span></li>' : "");
+    const rows = fx.map(r => {
+      if (!r.ok) return "<tr><td>" + esc(r.tag.label) + '</td><td colspan="3" class="soft small">Not enough nights yet (' + r.nw + " with, " + r.nwo + " without)</td></tr>";
+      const fmt = m => '<td class="mono">' + m.q.toFixed(1) + "/5 · " + dur(m.a) + " · " + Math.round(m.l) + " min</td>";
+      return "<tr><td><strong>" + esc(r.tag.label) + '</strong><br><span class="small soft">' + r.conf + " (p=" + r.p.toFixed(2) + ")</span></td>" + fmt(r.w) + fmt(r.wo) + '<td class="mono">' + r.nw + " / " + r.nwo + "</td></tr>";
+    }).join("");
+    $("#effTable").innerHTML = "<thead><tr><th>Habit</th><th>With it<br>rested · asleep · to fall asleep</th><th>Without it</th><th>Nights</th></tr></thead><tbody>" + rows + "</tbody>";
+    const rr = (a, b) => pearson(list.map(a), list.map(b));
+    const pairs = [["Longer sleep and feeling rested", rr(e => e.c.asleep, e => e.quality)], ["Later bedtime and feeling rested", rr(e => e.c.bedN, e => e.quality)], ["Night waking and feeling rested", rr(e => e.awake, e => e.quality)]].filter(p => p[1] != null);
+    const word = r => { const a = Math.abs(r); return a < 0.2 ? "No clear link" : (a < 0.4 ? "Weak " : a < 0.6 ? "Moderate " : "Strong ") + (r > 0 ? "positive" : "negative"); };
+    const good = list.filter(e => e.quality >= 4);
+    let need = "";
+    if (good.length >= 3) { const m = avg(good.map(e => e.c.asleep)); need = '<p style="margin-top:12px">On the ' + good.length + " nights you felt rested or great, you slept " + dur(m) + " on average." + (Math.abs(m - cfg.need * 60) > 20 && !usingSample() ? ' <button type="button" class="link" id="useNeed" data-need="' + (Math.round(m / 15) * 15 / 60) + '">Use this as my goal</button>' : "") + "</p>"; }
+    $("#corrBox").innerHTML = (pairs.length ? '<div class="scroll" style="margin-top:12px"><table><thead><tr><th>Pair</th><th>r</th><th>Reading</th></tr></thead><tbody>' + pairs.map(p => "<tr><td>" + p[0] + '</td><td class="mono">' + p[1].toFixed(2) + "</td><td>" + word(p[1]) + "</td></tr>").join("") + "</tbody></table></div>" : "") + need;
+  }
+  function renderClock(all) {
+    const c = chrono(all), r = sri(all.slice(-30)), el = $("#clockSum"), out = [];
+    if (r != null) out.push("Your sleep regularity is <strong>" + r + " out of 100</strong>. " + (r >= 85 ? "That is very regular." : r >= 70 ? "That is fairly regular. Aim for 80 or more." : "That is irregular. A fixed wake time raises it fastest."));
+    else out.push("Log 4 nights in a row to see how regular your sleep is.");
+    if (c) {
+      out.push("Your body clock looks like " + c.type + ". Your natural sleep window is about <strong>" + clock(c.from) + " to " + clock(c.to) + "</strong>.");
+      out.push(c.sjl < 60 ? "Your days off match your workdays well." : "You sleep about <strong>" + dur(c.sjl) + " later</strong> on days off. That is like flying across time zones every Monday.");
+    } else out.push("With 3 workday nights and 2 nights off, Lull can estimate your natural sleep window.");
+    el.innerHTML = '<ul class="bul">' + out.map(t => "<li>" + t + "</li>").join("") + "</ul>";
+  }
+  function drawRhythm() {
+    const all = dataList();
+    drawTimeline($("#chartTimeline"), all.slice(-14));
+    drawActo($("#chartActo"), all.slice(-21));
+  }
+  function renderWeek(all) {
+    const wc = $("#weekCmp");
+    if (all.length < 10) { wc.innerHTML = "<h2>This week against last week</h2><p class=\"soft\">Appears after 10 logged nights.</p>"; return; }
+    const a = summarize(all.slice(-7)), b = summarize(all.slice(-14, -7));
+    const row = (n, x, y, fmt, goodUp, u) => { const d = x - y, good = goodUp ? d > 0 : d < 0, flat = Math.abs(d) < 0.01; return "<tr><td>" + n + '</td><td class="mono">' + fmt(y) + '</td><td class="mono">' + fmt(x) + '</td><td class="mono delta ' + (flat ? "" : good ? "up" : "down") + '">' + (flat ? "same" : sgn(d, 0) + " " + u) + "</td></tr>"; };
+    wc.innerHTML = "<h2>This week against last week</h2><div class=\"scroll\"><table><thead><tr><th></th><th>Last week</th><th>This week</th><th>Change</th></tr></thead><tbody>" +
+      row("Sleep score", a.score, b.score, v => Math.round(v), true, "pts") + row("Time asleep", a.asleep, b.asleep, v => dur(v), true, "min") +
+      row("Falling asleep", a.latency, b.latency, v => Math.round(v) + " min", false, "min") + row("Bedtime spread", a.bedSd, b.bedSd, v => "±" + Math.round(v) + " min", false, "min") + "</tbody></table></div>";
+  }
+  function renderIdeas() {
+    const f = S.meta.focus, list = focusCandidates(f ? [f.id] : []).slice(0, 3);
+    $("#inNext").innerHTML = list.map(c => '<li><span><strong>' + esc(FOCUS[c.id].title()) + '</strong><br><span class="small soft">' + esc(c.reason) + '</span></span><button type="button" class="btn ghost small" data-focuspick="' + c.id + '">Make this my habit</button></li>').join("");
+  }
+
+  /* ================= charts ================= */
+  const NS = "http://www.w3.org/2000/svg";
+  function mk(tag, attrs, text) {
+    const e = document.createElementNS(NS, tag);
+    Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function xLabels(svg, list, m, slot, H) {
+    const every = Math.max(1, Math.ceil(30 / slot));
+    list.forEach((e, i) => {
+      if (i % every !== 0 && i !== list.length - 1) return;
+      const d = fromKey(e.key), cx = m.l + slot * i + slot / 2;
+      svg.appendChild(mk("text", { x: cx, y: H - 16, "text-anchor": "middle" }, "SMTWTFS"[d.getDay()]));
+      svg.appendChild(mk("text", { x: cx, y: H - 3, "text-anchor": "middle" }, String(d.getDate())));
+    });
+  }
+  function drawScore(g, list) {
+    g.innerHTML = "";
+    const W = Math.max(280, g.clientWidth || 320), H = 210, m = { l: 36, r: 12, t: 14, b: 36 }, n = list.length, slot = (W - m.l - m.r) / n;
+    const X = i => m.l + slot * i + slot / 2, Y = v => H - m.b - v / 100 * (H - m.b - m.t);
+    const svg = mk("svg", { width: W, height: H, role: "img", "aria-label": "Sleep score for the last " + n + " nights" });
+    const ax = mk("g", { "class": "ax" });
+    [0, 25, 50, 75, 100].forEach(v => { ax.appendChild(mk("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v) })); ax.appendChild(mk("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" }, v)); });
+    svg.appendChild(ax);
+    const pts = list.map((e, i) => [X(i), Y(e.score.total)]);
+    svg.appendChild(mk("path", { d: "M" + pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join("L") + "L" + X(n - 1) + "," + Y(0) + "L" + X(0) + "," + Y(0) + "Z", fill: "var(--accent)", opacity: 0.14 }));
+    svg.appendChild(mk("path", { d: "M" + pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join("L"), fill: "none", stroke: "var(--accent)", "stroke-width": 2.5, "stroke-linejoin": "round" }));
+    list.forEach((e, i) => { const c = mk("circle", { cx: pts[i][0], cy: pts[i][1], r: i === n - 1 ? 5 : 3, fill: "var(--accent)" }); c.appendChild(mk("title", {}, fmtDate(e.key) + ": score " + e.score.total)); svg.appendChild(c); });
+    const gl = mk("g", { "class": "ax" }); gl.appendChild(mk("text", { x: clamp(pts[n - 1][0], 12, W - 16), y: pts[n - 1][1] - 10, "text-anchor": "middle", style: "fill:var(--ink)" }, list[n - 1].score.total)); svg.appendChild(gl);
+    const xl = mk("g", { "class": "ax" }); xLabels(xl, list, m, slot, H); svg.appendChild(xl);
+    g.appendChild(svg);
+  }
+  function drawHours(g, list) {
+    g.innerHTML = "";
+    const W = Math.max(280, g.clientWidth || 320), n = list.length, m = { l: 48, r: 8, t: 14, b: 36 }, slot = (W - m.l - m.r) / n, bw = Math.min(30, slot * 0.64);
+    const H = 220, goal = cfg.need * 60, top = Math.ceil((Math.max(goal, Math.max.apply(null, list.map(e => e.c.asleep))) + 20) / 60) * 60;
+    const Y = v => H - m.b - v / top * (H - m.b - m.t);
+    const svg = mk("svg", { width: W, height: H, role: "img", "aria-label": "Hours asleep for the last " + n + " nights against a " + cfg.need + " hour goal" });
+    const ax = mk("g", { "class": "ax" });
+    for (let h = 0; h * 60 <= top; h += 2) { ax.appendChild(mk("line", { x1: m.l, x2: W - m.r, y1: Y(h * 60), y2: Y(h * 60) })); ax.appendChild(mk("text", { x: m.l - 8, y: Y(h * 60) + 4, "text-anchor": "end" }, h + " h")); }
+    svg.appendChild(ax);
+    list.forEach((e, i) => {
+      const x = m.l + slot * i + (slot - bw) / 2, ok = e.c.asleep >= goal - 15;
+      const r = mk("rect", { x, y: Y(e.c.asleep), width: bw, height: Y(0) - Y(e.c.asleep), rx: 4, fill: ok ? "var(--accent)" : "var(--dawn)" });
+      r.appendChild(mk("title", {}, fmtDate(e.key) + ": " + dur(e.c.asleep) + " asleep")); svg.appendChild(r);
+      if (bw >= 24) { const l = mk("g", { "class": "ax" }); l.appendChild(mk("text", { x: x + bw / 2, y: Y(e.c.asleep) - 4, "text-anchor": "middle" }, (e.c.asleep / 60).toFixed(1))); svg.appendChild(l); }
+    });
+    svg.appendChild(mk("line", { x1: m.l, x2: W - m.r, y1: Y(goal), y2: Y(goal), stroke: "var(--ink-soft)", "stroke-width": 2, "stroke-dasharray": "5 4" }));
+    const xl = mk("g", { "class": "ax" }); xLabels(xl, list, m, slot, H); svg.appendChild(xl);
+    g.appendChild(svg);
+  }
+  function drawTimeline(g, list) {
+    g.innerHTML = "";
+    if (!list.length) { g.innerHTML = '<p class="soft">Log a night to see your chart.</p>'; return; }
+    const W = Math.max(280, g.clientWidth || 320), n = list.length, m = { l: 62, r: 8, t: 10, b: 36 }, slot = (W - m.l - m.r) / n, bw = Math.min(30, slot * 0.64), H = 270;
+    const lo = Math.floor((Math.min.apply(null, list.map(e => e.c.bedN)) - 30) / 60) * 60, hi = Math.ceil((Math.max.apply(null, list.map(e => e.c.bedN + e.c.inBed)) + 30) / 60) * 60;
+    const Y = v => m.t + (v - lo) / (hi - lo) * (H - m.t - m.b);
+    const svg = mk("svg", { width: W, height: H, role: "img", "aria-label": "Bed and wake times for the last " + n + " nights" });
+    const ax = mk("g", { "class": "ax" }), step = (hi - lo) / 60 > 10 ? 120 : 60;
+    for (let v = lo; v <= hi; v += step) { ax.appendChild(mk("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v) })); ax.appendChild(mk("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, clock(v))); }
+    svg.appendChild(ax);
+    list.forEach((e, i) => {
+      const x = m.l + slot * i + (slot - bw) / 2, s = e.c.bedN, f = s + e.c.inBed, a = s + e.latency;
+      const bar = mk("rect", { x, y: Y(s), width: bw, height: Math.max(2, Y(f) - Y(s)), rx: 4, fill: "var(--accent-soft)" });
+      bar.appendChild(mk("title", {}, fmtDate(e.key) + ": " + clock(s) + " to " + clock(f) + ", asleep " + dur(e.c.asleep))); svg.appendChild(bar);
+      svg.appendChild(mk("rect", { x, y: Y(a), width: bw, height: Math.max(2, Y(f) - Y(a)), rx: 4, fill: "var(--accent)" }));
+    });
+    const xl = mk("g", { "class": "ax" }); xLabels(xl, list, m, slot, H); svg.appendChild(xl);
+    g.appendChild(svg);
+  }
+  function drawActo(g, list) {
+    g.innerHTML = "";
+    if (!list.length) { g.innerHTML = '<p class="soft">Log a night to see your rhythm.</p>'; return; }
+    const first = ord(list[0].key), last = ord(list[list.length - 1].key), rows = last - first + 1;
+    const by = {}; list.forEach(e => { by[ord(e.key)] = e; });
+    const W = Math.max(280, g.clientWidth || 320), m = { l: 58, r: 8, t: 22, b: 4 }, rh = 16, H = m.t + m.b + rows * rh;
+    const X = t => m.l + (t + 360) / 2880 * (W - m.l - m.r);
+    const svg = mk("svg", { width: W, height: H, role: "img", "aria-label": "Double-plotted sleep rhythm for the last " + rows + " days" });
+    const ax = mk("g", { "class": "ax" });
+    for (let t = -360; t <= 2520; t += 360) { ax.appendChild(mk("line", { x1: X(t), x2: X(t), y1: m.t - 4, y2: H - m.b })); if (t % 720 === 0 || t === -360) ax.appendChild(mk("text", { x: X(t), y: 12, "text-anchor": "middle" }, clock(t).replace(":00", "").replace(" ", ""))); }
+    svg.appendChild(ax);
+    for (let r = 0; r < rows; r++) {
+      const e = by[first + r], n = by[first + r + 1], y = m.t + r * rh;
+      if (r % Math.ceil(rows / 12) === 0 || r === rows - 1) { const d = new Date(Date.UTC(1970, 0, 1) + (first + r) * DAY0), tl = mk("g", { "class": "ax" }); tl.appendChild(mk("text", { x: m.l - 6, y: y + 11, "text-anchor": "end" }, DAYS[d.getUTCDay()] + " " + d.getUTCDate())); svg.appendChild(tl); }
+      [[e, 0], [n, 1440]].forEach(pr => {
+        if (!pr[0]) return;
+        svg.appendChild(mk("rect", { x: X(pr[0].c.onset + pr[1]), y: y + 2, width: Math.max(2, X(pr[0].c.wakeMin + pr[1]) - X(pr[0].c.onset + pr[1])), height: rh - 4, rx: 3, fill: "var(--accent)" }));
+      });
+    }
+    g.appendChild(svg);
+  }
+
+  /* ================= tools ================= */
+  const TOOLS = [["energy", "Energy and caffeine", "See today's energy curve and how much caffeine is left in you."], ["calm", "Wind down", "Slow breathing, what to do when you can't sleep, and a bedroom check."], ["nap", "Nap planner", "When to nap today, with a timer."], ["jet", "Jet lag planner", "A day-by-day plan for crossing time zones."]];
+  let toolSub = null;
+  let napTimer = null, napLeft = 0;
+  function renderTools() {
+    $("#toolTiles").hidden = !!toolSub;
+    $("#toolTiles").innerHTML = TOOLS.map(t => '<button type="button" class="tile" data-tool="' + t[0] + '"><strong>' + t[1] + "</strong><span>" + t[2] + "</span></button>").join("");
+    TOOLS.forEach(t => { $("#tool-" + t[0]).hidden = toolSub !== t[0]; });
+    if (toolSub === "energy") { $("#setHalf").value = String(cfg.half); if (!$("#cafTime").value) $("#cafTime").value = hhmm(nowMin()); $("#drinkBtns").innerHTML = DRINKS.map((d, i) => '<button type="button" class="btn ghost small" data-drink="' + i + '">' + d[0] + " · " + d[1] + " mg</button>").join(""); drawEnergy(); renderCaffeine(); }
+    if (toolSub === "nap") renderNap();
+    if (toolSub === "calm") renderCalm();
+    if (toolSub === "jet") renderJet();
+  }
+  function drawEnergy() {
+    const m = energyModel(), host = $("#chartEnergy");
+    host.innerHTML = "";
+    const W = Math.max(280, host.clientWidth || 320), H = 240, mg = { l: 40, r: 12, t: 28, b: 30 };
+    const X = x => mg.l + x / (m.bedx + 0.5) * (W - mg.l - mg.r), Y = v => H - mg.b - v / 100 * (H - mg.b - mg.t);
+    const svg = mk("svg", { width: W, height: H, role: "img", "aria-label": "Estimated alertness through the day, from waking at " + clock(m.wake) + " to bedtime" });
+    const ax = mk("g", { "class": "ax" });
+    [0, 50, 100].forEach(v => { ax.appendChild(mk("line", { x1: mg.l, x2: W - mg.r, y1: Y(v), y2: Y(v) })); ax.appendChild(mk("text", { x: mg.l - 6, y: Y(v) + 4, "text-anchor": "end" }, v === 0 ? "low" : v === 100 ? "high" : "")); });
+    const stepH = (W < 460) ? 4 : 2;
+    for (let h = 0; h <= m.bedx + 0.5; h += stepH) ax.appendChild(mk("text", { x: X(h), y: H - 8, "text-anchor": "middle" }, clock(m.wake + h * 60).replace(":00", "").replace(" ", "")));
+    svg.appendChild(ax);
+    const x0 = X(m.bedx - 2);
+    svg.appendChild(mk("rect", { x: x0, y: mg.t, width: Math.max(0, X(m.bedx) - x0), height: H - mg.b - mg.t, fill: "var(--accent-soft)", opacity: 0.45 }));
+    const area = "M" + m.pts.map(a => X(a[0]).toFixed(1) + "," + Y(a[1]).toFixed(1)).join("L") + "L" + X(m.pts[m.pts.length - 1][0]).toFixed(1) + "," + Y(0) + "L" + X(0) + "," + Y(0) + "Z";
+    svg.appendChild(mk("path", { d: area, fill: "var(--accent)", opacity: 0.16 }));
+    svg.appendChild(mk("path", { d: "M" + m.pts.map(a => X(a[0]).toFixed(1) + "," + Y(a[1]).toFixed(1)).join("L"), fill: "none", stroke: "var(--accent)", "stroke-width": 2.5 }));
+    const lab = (pt, text, color) => {
+      svg.appendChild(mk("circle", { cx: X(pt[0]), cy: Y(pt[1]), r: 4.5, fill: color }));
+      const g = mk("g", { "class": "ax" }); g.appendChild(mk("text", { x: clamp(X(pt[0]), 30, W - 40), y: Y(pt[1]) - 10, "text-anchor": "middle", style: "fill:var(--ink)" }, text)); svg.appendChild(g);
+    };
+    lab(m.peak, "focus", "var(--accent)"); lab(m.dip, "dip", "var(--dawn)");
+    if (m.eve) lab(m.eve, "second wind", "var(--accent)");
+    const nx = ((nowMin() - m.wake + 1440) % 1440) / 60;
+    if (nx <= m.bedx + 0.5) {
+      svg.appendChild(mk("line", { x1: X(nx), x2: X(nx), y1: mg.t - 6, y2: H - mg.b, stroke: "var(--dawn)", "stroke-width": 2, "stroke-dasharray": "4 3" }));
+      const g = mk("g", { "class": "ax" }); g.appendChild(mk("text", { x: clamp(X(nx), 16, W - 20), y: mg.t - 10, "text-anchor": "middle", style: "fill:var(--dawn)" }, "now")); svg.appendChild(g);
+    }
+    host.appendChild(svg);
+    $("#energyNote").textContent = "Wake " + clock(m.wake) + " · bed " + clock(m.bed) + (m.debtH > 1 ? " · sleep debt adds drag" : "");
+    const t = x => clock(m.wake + x * 60);
+    const facts = ["<li><span>Best for hard thinking</span><strong>" + t(Math.max(0.5, m.peak[0] - 0.75)) + " to " + t(m.peak[0] + 0.75) + "</strong></li>", "<li><span>Expected afternoon dip</span><strong>around " + t(m.dip[0]) + "</strong></li>"];
+    if (m.eve) facts.push("<li><span>Second wind</span><strong>around " + t(m.eve[0]) + "</strong></li>");
+    facts.push("<li><span>Melatonin starts rising</span><strong>from about " + t(m.bedx - 2) + "</strong></li>");
+    facts.push("<li><span>Latest coffee that leaves you under " + CAF_TARGET + " mg</span><strong>" + clock(m.bed - cfg.half * 60 * Math.log2(95 / CAF_TARGET)) + "</strong></li>");
+    $("#energyFacts").innerHTML = facts.join("");
+  }
+  function renderCaffeine() {
+    const k = today(), items = cafDay(k).slice().sort((a, b) => a.t - b.t), p = planBedtime();
+    const bed = p.bed < p.wake ? p.bed + 1440 : p.bed;
+    const total = items.reduce((t, d) => t + d.mg, 0);
+    $("#cafTotal").textContent = total ? total + " mg today" + (total > 400 ? " · above the 400 mg daily guide" : "") : "Nothing logged today";
+    const host = $("#chartCaf"); host.innerHTML = "";
+    const W = Math.max(260, host.clientWidth || 300), H = 170, mg = { l: 40, r: 10, t: 12, b: 26 };
+    const t0 = Math.min(360, items.length ? items[0].t - 30 : 360), t1 = Math.max(bed + 60, 1380);
+    const peak = Math.max(60, Math.max.apply(null, items.map(d => cafAt(items, d.t + 1))), 1);
+    const X = t => mg.l + (t - t0) / (t1 - t0) * (W - mg.l - mg.r), Y = v => H - mg.b - v / (peak * 1.1) * (H - mg.b - mg.t);
+    const svg = mk("svg", { width: W, height: H, role: "img", "aria-label": "Estimated caffeine in your body through the day" });
+    const ax = mk("g", { "class": "ax" });
+    ax.appendChild(mk("line", { x1: mg.l, x2: W - mg.r, y1: Y(0), y2: Y(0) }));
+    for (let t = Math.ceil(t0 / 360) * 360; t <= t1; t += 360) ax.appendChild(mk("text", { x: X(t), y: H - 8, "text-anchor": "middle" }, clock(t).replace(":00", "").replace(" ", "")));
+    ax.appendChild(mk("text", { x: mg.l - 6, y: Y(0) + 4, "text-anchor": "end" }, "0"));
+    ax.appendChild(mk("text", { x: mg.l - 6, y: Y(peak) + 4, "text-anchor": "end" }, Math.round(peak)));
+    svg.appendChild(ax);
+    if (items.length) {
+      const pts = []; for (let t = t0; t <= t1; t += 10) pts.push([t, cafAt(items, t)]);
+      svg.appendChild(mk("path", { d: "M" + pts.map(a => X(a[0]).toFixed(1) + "," + Y(a[1]).toFixed(1)).join("L") + "L" + X(t1) + "," + Y(0) + "L" + X(t0) + "," + Y(0) + "Z", fill: "var(--dawn)", opacity: 0.25 }));
+      svg.appendChild(mk("path", { d: "M" + pts.map(a => X(a[0]).toFixed(1) + "," + Y(a[1]).toFixed(1)).join("L"), fill: "none", stroke: "var(--dawn)", "stroke-width": 2.5 }));
+    }
+    svg.appendChild(mk("line", { x1: mg.l, x2: W - mg.r, y1: Y(CAF_TARGET), y2: Y(CAF_TARGET), stroke: "var(--ink-soft)", "stroke-dasharray": "5 4" }));
+    svg.appendChild(mk("line", { x1: X(bed), x2: X(bed), y1: mg.t, y2: Y(0), stroke: "var(--accent)", "stroke-width": 2 }));
+    const g = mk("g", { "class": "ax" }); g.appendChild(mk("text", { x: Math.min(X(bed) + 4, W - 40), y: mg.t + 8, style: "fill:var(--accent)" }, "bed")); svg.appendChild(g);
+    host.appendChild(svg);
+    const atBed = cafAt(items, bed);
+    let msg;
+    if (!items.length) msg = "Log drinks as you have them. Lull shows what's left at bedtime and the latest coffee that still leaves you under " + CAF_TARGET + " mg.";
+    else if (atBed <= CAF_TARGET) msg = "About " + Math.round(atBed) + " mg left at bedtime (" + clock(bed) + "). That is under the " + CAF_TARGET + " mg target.";
+    else msg = "About " + Math.round(atBed) + " mg would still be in you at bedtime (" + clock(bed) + "). Skip more caffeine today and expect it to take longer to fall asleep.";
+    const room = CAF_TARGET - atBed;
+    if (items.length && room > 8) msg += " One more coffee is fine until " + clock(bed - cfg.half * 60 * Math.log2(95 / room)) + ".";
+    $("#cafAdvice").textContent = msg;
+    $("#cafList").innerHTML = items.map(d => '<li><span>' + clock(d.t) + " · " + esc(d.name) + " · " + d.mg + ' mg</span><button type="button" class="btn ghost small" data-cafdel="' + d.id + '" aria-label="Remove ' + esc(d.name) + ' at ' + clock(d.t) + '">Remove</button></li>').join("");
+  }
+  function addDrink(name, mg) {
+    const k = today(), t = TIME_RE.test($("#cafTime").value) ? toMin($("#cafTime").value) : nowMin();
+    const items = cafDay(k).concat([{ id: Date.now() + "" + Math.floor(Math.random() * 1000), t, mg, name }]);
+    S.caf[k] = { u: Date.now(), items }; commit(); renderCaffeine(); drawEnergy();
+  }
+  function renderNap() {
+    const p = planBedtime(), s = p.wake + 360;
+    const end = Math.min(p.wake + 540, (p.bed + (p.bed < p.wake ? 1440 : 0)) - 480);
+    $("#napAdvice").textContent = end - s >= 20 ? "Best nap window today: " + clock(s) + " to " + clock(end) + ". That is 6 to 9 hours after waking and at least 8 hours before bed." : "Today a nap would cut into tonight's sleep. A 10-minute rest with your eyes closed is the safer option.";
+    if (!napTimer) $("#napClock").textContent = pad(+$("#napLen").value) + ":00";
+  }
+  function napTick() {
+    napLeft -= 1;
+    $("#napClock").textContent = pad(Math.floor(napLeft / 60)) + ":" + pad(napLeft % 60);
+    if (napLeft <= 0) { clearInterval(napTimer); napTimer = null; $("#napBtn").textContent = "Start nap timer"; $("#napClock").textContent = "Time to get up"; beep(); }
+  }
+  function beep() {
+    try { const A = window.AudioContext || window.webkitAudioContext, c = new A(), o = c.createOscillator(), g = c.createGain(); o.frequency.value = 660; g.gain.value = 0.15; o.connect(g); g.connect(c.destination); o.start(); setTimeout(() => { o.stop(); c.close(); }, 900); } catch (e) {}
+  }
+  function renderJet() {
+    if (!$("#jlDate").value) $("#jlDate").value = addDays(today(), 7);
+    const east = $("#jlDir").value === "1", hours = clamp(parseInt($("#jlHrs").value, 10) || 0, 1, 12), arrive = $("#jlDate").value || today(), pre = +$("#jlPre").value;
+    const out = $("#jlOut");
+    const pl = jetPlan(east, hours, arrive, pre);
+    const win = (cbt, adv, seek) => {
+      const a = seek ? (adv ? cbt : cbt - 240) : (adv ? cbt - 240 : cbt), b = seek ? (adv ? cbt + 180 : cbt) : (adv ? cbt : cbt + 180);
+      return clock(a) + " to " + clock(b);
+    };
+    const rowsHtml = pl.rows.map(r => {
+      const off = r.off, same = off <= 0.01;
+      const bodyWake = r.wake + (r.adv ? 1 : -1) * off * 60, cbt = bodyWake - 150;
+      const lightSeek = same ? "Morning light after waking" : r.pre ? (r.adv ? "Soon after waking" : "Evening, before bed") : win(cbt, r.adv, true);
+      const lightAvoid = same ? "-" : r.pre ? (r.adv ? "Evening" : "First 2 hours after waking") : win(cbt, r.adv, false);
+      return "<tr><td><strong>" + r.label + '</strong><br><span class="small soft">' + esc(fmtDate(r.date)) + '</span></td><td class="mono">' + clock(r.bed) + " to " + clock(r.wake) + '<br><span class="small soft">' + r.clockNote + '</span></td><td class="mono">' + (same ? "in sync" : off.toFixed(1) + " h") + '</td><td class="mono">' + lightSeek + '</td><td class="mono">' + lightAvoid + "</td></tr>";
+    }).join("");
+    out.innerHTML = '<p>' + (east ? "Flying east" : "Flying west") + " " + hours + " zones means shifting your body clock " + (pl.useAdv ? "earlier" : "later") + " by about " + (Math.round(pl.need * 10) / 10) + " h, at roughly " + pl.rate + " h a day. Expect " + (pl.days === 0 ? "to be in sync on arrival" : "about " + pl.days + " day" + (pl.days > 1 ? "s" : "") + " to adapt after landing") + ".</p>" +
+      '<div class="scroll"><table><thead><tr><th>Day</th><th>Bed to wake</th><th>Body clock off by</th><th>Seek bright light</th><th>Avoid bright light</th></tr></thead><tbody>' + rowsHtml + "</tbody></table></div>" +
+      '<ul class="small soft"><li>Before the flight, shift bed and wake times each day as shown. After landing, follow local mealtimes and daylight.</li><li>Light windows are estimates for your body clock. Bright light means outdoor daylight or a very bright lamp; sunglasses help in the avoid window. If a window falls while you would be asleep, use the part when you are awake.</li><li>Keep naps under 30 minutes and before 3 pm local time. Caffeine early in the local day is fine.</li><li>Melatonin timing is a question for a pharmacist or doctor, especially with medicines or health conditions.</li></ul>';
+  }
+
+  /* ---- wind down ---- */
+  let pat = "p478", running = false, timer = null, stepIdx = 0, left = 0, cycles = 0;
+  const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  function renderCalm() {
+    $("#patSeg").innerHTML = Object.keys(PATTERNS).map(k => '<label><input type="radio" name="pat" value="' + k + '"' + (k === pat ? " checked" : "") + "><span>" + PATTERNS[k].name + "</span></label>").join("");
+    const ROOM = [["cool", "Cool: about " + temp() + " suits most people"], ["dark", "Dark: blackout curtains or an eye mask"], ["quiet", "Quiet, or steady white noise"], ["phone", "Phone charging out of arm's reach"], ["alarm", "Alarm set for the same time every day"]];
+    $("#roomList").innerHTML = ROOM.map(r => '<li><label><input type="checkbox" data-room="' + r[0] + '"' + (S.meta.room[r[0]] ? " checked" : "") + ">" + esc(r[1]) + "</label></li>").join("");
+  }
+  function enterStep() {
+    const s = PATTERNS[pat].steps[stepIdx], orb = $("#orb");
+    orb.style.transition = reduce ? "none" : "transform " + s[1] + "s ease-in-out";
+    orb.style.transform = "scale(" + s[2] + ")";
+    $("#cue").textContent = s[0]; left = s[1];
+    $("#cueSub").textContent = left + "  ·  rounds " + cycles;
+  }
+  function tick() {
+    left -= 1;
+    if (left <= 0) { stepIdx = (stepIdx + 1) % PATTERNS[pat].steps.length; if (stepIdx === 0) cycles += 1; enterStep(); }
+    else $("#cueSub").textContent = left + "  ·  rounds " + cycles;
+  }
+  function stopBreath() {
+    running = false; clearInterval(timer);
+    $("#breathBtn").textContent = "Start";
+    $("#cue").textContent = cycles ? "Well done" : "Ready when you are";
+    $("#cueSub").textContent = cycles ? cycles + " rounds" : "";
+    $("#orb").style.transition = reduce ? "none" : "transform 1.5s ease-in-out";
+    $("#orb").style.transform = "scale(0.45)";
+  }
+  function startBreath() { running = true; stepIdx = 0; cycles = 0; $("#breathBtn").textContent = "Stop"; enterStep(); timer = setInterval(tick, 1000); }
+
+  /* ================= coach ================= */
+  let chatMsgs = [], coachBusy = false, coachAvail = null, coachCtl = null, coachP = null;
+  function coachContext() {
+    const real = realList(), list = real.slice(-21), c = chrono(real), r = sri(real.slice(-30)), p = prof();
+    if (!list.length) return "The person has not logged any nights yet. Give general guidance and encourage them to log a few nights.";
+    const s = summarize(list.slice(-14));
+    const lines = list.map(e => [e.key, DAYS[fromKey(e.key).getDay()], "bed " + e.bed, "wake " + e.wake, "fall asleep " + e.latency + "m", "awake " + e.awake + "m", "asleep " + Math.round(e.c.asleep) + "m", "eff " + Math.round(e.c.eff * 100) + "%", "rested " + e.quality + "/5", "score " + e.score.total, e.tags.length ? "habits: " + e.tags.join("+") : ""].join(", "));
+    const goal = GOALS.filter(g => g[0] === p.goal)[0][1];
+    return "Their main goal: " + goal + ". Things they said apply: " + ((p.issues || []).map(i => ISSUES.filter(x => x[0] === i)[0][1]).join("; ") || "none given") + ". Current weekly habit: " + (S.meta.focus && FOCUS[S.meta.focus.id] ? FOCUS[S.meta.focus.id].title() : "none") + ".\n" +
+      "Sleep goal: " + cfg.need + " h, target wake " + cfg.wake + ". Free days (no alarm): " + (cfg.free || []).map(d => DAYS[d]).join("/") + ".\n" +
+      "Last 14 nights: avg asleep " + Math.round(s.asleep) + "m, efficiency " + Math.round(s.eff * 100) + "%, avg minutes to fall asleep " + Math.round(s.latency) + ", avg score " + Math.round(s.score) + ", bedtime spread +/-" + Math.round(s.bedSd) + "m, wake spread +/-" + Math.round(s.wakeSd) + "m, 14-night sleep debt " + Math.round(s.debt) + "m." +
+      (r != null ? " Sleep regularity index " + r + "/100." : "") + (c ? " Chronotype midpoint " + hhmm(c.msfsc) + ", social jet lag " + Math.round(c.sjl) + "m." : "") + "\nNights (oldest first):\n" + lines.join("\n");
+  }
+  const COACH_RULES = "You are Lull's sleep coach inside a sleep tracking app. Use only the logged data below and well-established sleep science (sleep regularity, light timing, caffeine half-life, CBT-I principles). Be specific: cite dates, times and numbers from the data, and tie advice to the person's stated goal. Give at most three concrete, prioritized actions. Say when the data is too thin to conclude, and never present a correlation as proof. You are not a doctor: do not diagnose; if the data or question suggests insomnia lasting months, sleep apnea signs, severe sleepiness or low mood, advise seeing a clinician. Do not suggest sleeping pills or supplements beyond saying to ask a pharmacist or doctor. Write plain text in short paragraphs, no markdown headings or tables, under 220 words.";
+  function renderCoach() {
+    const chips = [["Why am I tired?", "Looking at my data, what is most likely making me feel tired, and what should I change first?"], ["Review my week", "Give me a short review of my last 7 nights: what went well, what didn't, and one thing to try this week."], ["Plan my next 3 nights", "Plan my next three nights with specific bed and wake times and what to do in the evening."], ["Is my weekend hurting me?", "Compare my weekday and weekend nights. Is my weekend schedule hurting my sleep?"]];
+    $("#coachChips").innerHTML = chips.map((c, i) => '<button type="button" class="chip-t" data-chip="' + i + '">' + esc(c[0]) + "</button>").join("");
+    $("#coachChips").dataset.prompts = JSON.stringify(chips.map(c => c[1]));
+    $("#coachNote").textContent = usingSample() ? "No logged nights yet, so answers will be general" : "Uses your last " + Math.min(21, realList().length) + " nights";
+    if (coachAvail === null && !coachP) { if (window.claude && window.claude.use) coachP = window.claude.use("sample").then(s => { coachAvail = s || false; coachUi(); }, () => { coachAvail = false; coachUi(); }); else coachAvail = false; }
+    coachUi();
+    if (!chatMsgs.length) $("#chat").innerHTML = '<div class="bubble ai">Ask me anything about your sleep, or tap a question above. I can see your recent nights, your goal and the patterns Lull found.</div>';
+  }
+  function coachUi() {
+    const off = coachAvail === false;
+    $("#coachSend").disabled = off || coachBusy; $("#coachIn").disabled = off;
+    $$("#coachChips button").forEach(b => { b.disabled = off || coachBusy; });
+    if (off) $("#coachNote").textContent = "The coach isn't available in this view";
+  }
+  async function ask(q) {
+    q = (q || "").trim(); if (!q || coachBusy) return;
+    if (coachAvail === null && coachP) await coachP;
+    if (!coachAvail) return;
+    coachBusy = true; coachUi();
+    const chat = $("#chat");
+    if (!chatMsgs.length) chat.innerHTML = "";
+    chatMsgs.push({ role: "user", content: q });
+    const me = document.createElement("div"); me.className = "bubble me"; me.textContent = q; chat.appendChild(me);
+    const ai = document.createElement("div"); ai.className = "bubble ai"; ai.textContent = "Thinking..."; chat.appendChild(ai); chat.scrollTop = chat.scrollHeight;
+    const msgs = chatMsgs.map((m, i) => i === 0 ? { role: "user", content: COACH_RULES + "\n\nDATA\n" + coachContext() + "\n\nQUESTION\n" + m.content } : m);
+    try {
+      coachCtl = new AbortController();
+      const res = await coachAvail(msgs, { signal: coachCtl.signal, cache: false, onText: u => { ai.textContent = u.text; chat.scrollTop = chat.scrollHeight; } });
+      ai.textContent = res.text; chatMsgs.push({ role: "assistant", content: res.text });
+    } catch (e) {
+      chatMsgs.pop();
+      ai.textContent = e && e.code === "not_granted" ? "Permission wasn't given, so the coach can't read your summary. You can ask again any time." : e && e.code === "rate_limited" ? "The coach is busy. Wait a minute and try again." : "The coach couldn't answer. Try again in a moment.";
+    }
+    coachBusy = false; coachUi(); chat.scrollTop = chat.scrollHeight;
+  }
+
+  /* ================= me ================= */
+  function renderMe() {
+    const p = prof();
+    $("#meName").value = p.name || "";
+    $("#meGoal").innerHTML = GOALS.map(g => '<option value="' + g[0] + '"' + (p.goal === g[0] ? " selected" : "") + ">" + g[1] + "</option>").join("");
+    $("#meIssues").innerHTML = ISSUES.map(i => '<label><input type="checkbox" value="' + i[0] + '"' + ((p.issues || []).indexOf(i[0]) >= 0 ? " checked" : "") + ">" + esc(i[1]) + "</label>").join("");
+    $("#setWake").value = cfg.wake; $("#setNeed").value = cfg.need;
+    $("#setClock").value = cfg.h24 ? "24" : "12"; $("#setUnit").value = cfg.f ? "f" : "c";
+    $("#setFree").innerHTML = DAYS.map((d, i) => '<button type="button" class="chip-t" data-free="' + i + '" aria-pressed="' + ((cfg.free || []).indexOf(i) >= 0) + '">' + d + "</button>").join("");
+    $("#meBed").textContent = "Your bedtime: " + clock(planBedtime().bed) + ".";
+    renderDataNote();
+    const list = realList().slice().reverse(), el = $("#entryList");
+    if (!list.length) { el.innerHTML = '<li><p class="soft">No nights saved yet. Tap Log a night at the top.</p></li>'; return; }
+    el.innerHTML = list.slice(0, 30).map(e => {
+      const tags = e.tags.map(id => { const t = tagById(id); return t ? t.label : ""; }).filter(Boolean).join(", ");
+      return '<li><div><strong>' + esc(fmtDate(e.key)) + '</strong> <span class="pill ' + (e.score.total >= 70 ? "good" : e.score.total >= 55 ? "warn" : "bad") + '">' + e.score.total + '</span><div class="meta mono"><span>' + clock(toMin(e.bed)) + " to " + clock(toMin(e.wake)) + "</span><span>" + dur(e.c.asleep) + " asleep</span><span>" + esc(QUALITY[e.quality - 1]) + "</span></div>" +
+        (tags ? '<div class="small soft">' + esc(tags) + "</div>" : "") + (e.note ? '<div class="small">' + esc(e.note) + "</div>" : "") + '</div><div class="btn-row"><button type="button" class="btn ghost small" data-edit="' + e.key + '">Edit</button><button type="button" class="btn ghost small danger" data-del="' + e.key + '">Delete</button></div></li>';
+    }).join("");
+  }
+  function renderDataNote() {
+    $("#dataNote").textContent = sync.ref
+      ? "Your nights are saved in this browser and synced to your claude.ai account, so they follow you to other devices. Only you can read them."
+      : "Lull keeps your nights in this browser only. To move to another device or keep a safety copy, save a backup file or copy the backup text and restore it there.";
+  }
+
+  /* ---------- export ---------- */
+  const csvCell = v => { v = String(v == null ? "" : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  function csv() {
+    const rows = [["date", "bed", "wake", "minutes_to_fall_asleep", "minutes_awake", "minutes_asleep", "efficiency_pct", "rested_1_to_5", "score", "habits", "note"]];
+    realList().forEach(e => rows.push([e.key, e.bed, e.wake, e.latency, e.awake, e.c.asleep, Math.round(e.c.eff * 100), e.quality, e.score.total, e.tags.join(" "), e.note || ""]));
+    return rows.map(r => r.map(csvCell).join(",")).join("\n");
+  }
+  async function saveFile(name, data) {
+    const msg = $("#bkMsg");
+    try {
+      const d = await window.claude.use("downloads");
+      if (!d) throw { code: "unavailable" };
+      await d.save({ filename: name, data });
+      say(msg, "Saved " + name + ".", "ok");
+    } catch (e) {
+      if (e && e.code === "declined") { say(msg, "", ""); return; }
+      const t = $("#bkText"); t.value = data; t.focus(); t.select();
+      say(msg, "File saving isn't available here. The text is selected below so you can copy it.", "");
+    }
+  }
+  const backupText = () => JSON.stringify({ lull: 2, state: S });
+
+  /* ================= events ================= */
+  const on = (sel, ev, fn) => $(sel).addEventListener(ev, fn);
+  on(".tabs", "click", e => { const b = e.target.closest("button[data-tab]"); if (b) { if (b.dataset.tab === "tools") toolSub = null; show(b.dataset.tab); } });
+  on("#logBtn", "click", () => openLog(today()));
+  on("#goLog", "click", () => openLog(today()));
+  on("#goWelcome", "click", () => { onb = { step: 0, name: prof().name || "", goal: prof().goal || "learn", wake: cfg.wake, need: cfg.need, issues: (prof().issues || []).slice() }; show("welcome"); });
+  on("#redoSetup", "click", () => { onb = { step: 0, name: prof().name || "", goal: prof().goal || "learn", wake: cfg.wake, need: cfg.need, issues: (prof().issues || []).slice() }; show("welcome"); });
+  on("#logBack", "click", () => show(lastMain));
+
+  /* welcome */
+  on("#welcome", "click", e => {
+    const g = e.target.closest("[data-goal]"), i = e.target.closest("[data-issue]"), n = e.target.closest("[data-onb]");
+    if (g) { onb.goal = g.dataset.goal; renderWelcome(); }
+    if (i) { const id = i.dataset.issue, at = onb.issues.indexOf(id); if (at >= 0) onb.issues.splice(at, 1); else onb.issues.push(id); renderWelcome(); }
+    if (n) {
+      const a = n.dataset.onb;
+      if (a === "next") { onb.step = Math.min(3, onb.step + 1); renderWelcome(); window.scrollTo(0, 0); }
+      if (a === "back") { onb.step = Math.max(0, onb.step - 1); renderWelcome(); }
+      if (a === "skip") { const p = prof(); p.done = true; touchMeta(); commit(); show("home"); }
+      if (a === "finish") show("home");
+    }
+  });
+  on("#welcome", "input", e => {
+    if (e.target.id === "onName") onb.name = e.target.value;
+    if (e.target.id === "onWake" && TIME_RE.test(e.target.value)) onb.wake = e.target.value;
+    if (e.target.name === "onneed") onb.need = +e.target.value;
+  });
+
+  /* home */
+  on("#v-home", "click", e => {
+    const t = e.target;
+    if (t.closest("#qSave")) saveQuick();
+    if (t.closest("#qMore")) openLog(today(), { bed: $("#qBed").value, wake: $("#qWake").value, quality: +($("#cQuick input[name=qq]:checked") || { value: 3 }).value, tags: $$("#cQuick [data-qtag][aria-pressed=true]").map(b => b.dataset.qtag) });
+    const ch = t.closest("[data-qtag]"); if (ch) ch.setAttribute("aria-pressed", ch.getAttribute("aria-pressed") === "true" ? "false" : "true");
+    if (t.closest("[data-quickedit]")) openLog(today());
+    const gt = t.closest("[data-goto]");
+    if (gt) { if (gt.dataset.goto === "calm") { toolSub = "calm"; show("tools"); } else { const l = $("#stepsList"); l.hidden = !l.hidden; } }
+    const fc = t.closest("[data-focus]");
+    if (fc) {
+      const a = fc.dataset.focus, f = S.meta.focus;
+      if (a === "tick") { const k = f.id + "|" + today(); if (S.meta.fl[k]) delete S.meta.fl[k]; else S.meta.fl[k] = 1; touchMeta(); commit(); renderFocus(); }
+      if (a === "again") { S.meta.fhist.push({ id: f.id, start: f.start }); startFocus(f.id, f.reason); renderFocus(); }
+      if (a === "next") { S.meta.fhist.push({ id: f.id, start: f.start }); const c = focusCandidates([f.id])[0]; startFocus(c.id, c.reason); renderFocus(); }
+    }
+    const fp = t.closest("[data-focuspick]");
+    if (fp) { pickFocus(fp.dataset.focuspick); renderFocus(); }
+  });
+  function pickFocus(id) {
+    const f = S.meta.focus;
+    if (f && f.id !== id && today() > f.start) S.meta.fhist.push({ id: f.id, start: f.start });
+    const c = focusCandidates().filter(x => x.id === id)[0];
+    startFocus(id, c ? c.reason : "");
+  }
+
+  /* log */
+  on("#logForm", "input", updatePreview);
+  on("#fDate", "change", () => {
+    const k = $("#fDate").value; if (!k) return;
+    if (S.entries[k]) fillForm(k);
+    else { editingKey = null; $("#formTitle").textContent = "Log a night"; $("#fSave").textContent = "Save night"; }
+  });
+  on("#logForm", "submit", e => {
+    e.preventDefault();
+    const f = readForm(), err = validate(f), msg = $("#fMsg");
+    if (err) { say(msg, err, "err"); return; }
+    S.entries[f.date] = { bed: f.bed, wake: f.wake, latency: f.latency, awake: f.awake, quality: f.quality, tags: f.tags, note: f.note, u: Date.now() };
+    commit();
+    const sc = realList().filter(x => x.key === f.date)[0];
+    say(msg, "Saved: " + dur(sc.c.asleep) + " asleep, score " + sc.score.total + ".", "ok");
+    editingKey = f.date; $("#formTitle").textContent = "Edit " + fmtDate(f.date); $("#fSave").textContent = "Update night";
+    setTimeout(() => { if (current === "log") show(lastMain); }, 900);
+  });
+
+  /* insights */
+  on("#v-insights", "change", e => {
+    if (e.target.name === "met") { metric = e.target.value; drawMain(); }
+    if (e.target.name === "range") { range = +e.target.value; drawMain(); }
+  });
+  on("#v-insights", "click", e => {
+    const b = e.target.closest("#useNeed"); if (b) { cfg.need = clamp(+b.dataset.need, 5, 11); touchMeta(); commit(); renderInsights(); }
+    const fp = e.target.closest("[data-focuspick]"); if (fp) { pickFocus(fp.dataset.focuspick); say($("#sumNote"), "Habit changed. See it on Home.", "ok"); renderIdeas(); }
+    const c = e.target.closest("[data-chip]"); if (c) ask(JSON.parse($("#coachChips").dataset.prompts)[+c.dataset.chip]);
+  });
+  on("#clockDetails", "toggle", () => { if ($("#clockDetails").open) drawRhythm(); });
+  on("#coachForm", "submit", e => { e.preventDefault(); const q = $("#coachIn").value; $("#coachIn").value = ""; ask(q); });
+
+  /* tools */
+  on("#v-tools", "click", e => {
+    const t = e.target.closest("[data-tool]"); if (t) { toolSub = t.dataset.tool; renderTools(); window.scrollTo(0, 0); }
+    if (e.target.closest("[data-toolback]")) { if (running) stopBreath(); toolSub = null; renderTools(); }
+    const dr = e.target.closest("[data-drink]"); if (dr) { const d = DRINKS[+dr.dataset.drink]; addDrink(d[0], d[1]); }
+    const del = e.target.closest("[data-cafdel]"); if (del) { const k = today(); S.caf[k] = { u: Date.now(), items: cafDay(k).filter(d => d.id !== del.dataset.cafdel) }; commit(); renderCaffeine(); drawEnergy(); }
+  });
+  on("#cafCustom", "click", () => { const mg = parseInt($("#cafMg").value, 10); if (mg >= 5 && mg <= 500) { addDrink("Custom", mg); $("#cafMg").value = ""; } });
+  on("#setHalf", "change", e => { cfg.half = parseFloat(e.target.value); touchMeta(); commit(); renderCaffeine(); });
+  on("#napLen", "change", () => { if (!napTimer) renderNap(); });
+  on("#napBtn", "click", () => {
+    if (napTimer) { clearInterval(napTimer); napTimer = null; $("#napBtn").textContent = "Start nap timer"; renderNap(); return; }
+    napLeft = +$("#napLen").value * 60; $("#napBtn").textContent = "Cancel"; $("#napClock").textContent = pad(+$("#napLen").value) + ":00";
+    napTimer = setInterval(napTick, 1000);
+  });
+  ["#jlDir", "#jlHrs", "#jlDate", "#jlPre"].forEach(s => on(s, "input", renderJet));
+  on("#patSeg", "change", e => { pat = e.target.value; if (running) stopBreath(); });
+  on("#breathBtn", "click", () => { if (running) stopBreath(); else startBreath(); });
+  on("#roomList", "change", e => { const k = e.target.dataset.room; if (k) { S.meta.room[k] = e.target.checked; touchMeta(); commit(); } });
+
+  /* me */
+  on("#meName", "input", e => { prof().name = e.target.value.trim().slice(0, 30); touchMeta(); commit(); });
+  on("#meGoal", "change", e => { prof().goal = e.target.value; touchMeta(); commit(); });
+  on("#meIssues", "change", () => { prof().issues = $$("#meIssues input:checked").map(i => i.value); touchMeta(); commit(); });
+  on("#setWake", "change", e => { if (TIME_RE.test(e.target.value)) { cfg.wake = e.target.value; touchMeta(); commit(); renderMe(); } });
+  on("#setNeed", "change", e => { const v = parseFloat(e.target.value); if (v >= 5 && v <= 11) { cfg.need = v; touchMeta(); commit(); renderMe(); } });
+  on("#setClock", "change", e => { cfg.h24 = e.target.value === "24"; touchMeta(); commit(); renderMe(); });
+  on("#setUnit", "change", e => { cfg.f = e.target.value === "f"; touchMeta(); commit(); renderMe(); });
+  on("#setFree", "click", e => {
+    const b = e.target.closest("[data-free]"); if (!b) return;
+    const d = +b.dataset.free, at = (cfg.free || []).indexOf(d); cfg.free = (cfg.free || []).slice();
+    if (at >= 0) cfg.free.splice(at, 1); else cfg.free.push(d);
+    touchMeta(); commit(); b.setAttribute("aria-pressed", at < 0 ? "true" : "false");
+  });
+  on("#meAdd", "click", () => openLog(addDays(today(), -1)));
+  let delArm = null;
+  on("#entryList", "click", e => {
+    const ed = e.target.closest("[data-edit]"), del = e.target.closest("[data-del]");
+    if (ed) openLog(ed.dataset.edit);
+    if (del) {
+      if (delArm === del.dataset.del) { delete S.entries[delArm]; S.dels[delArm] = Date.now(); delArm = null; commit(); renderMe(); }
+      else { delArm = del.dataset.del; del.textContent = "Confirm delete"; setTimeout(() => { if (delArm) { delArm = null; if (current === "me") renderMe(); } }, 4000); }
+    }
+  });
+  on("#exCsv", "click", () => saveFile("lull-nights.csv", csv()));
+  on("#exJson", "click", () => saveFile("lull-backup.json", backupText()));
+  on("#bkCopy", "click", () => {
+    const text = backupText();
+    const fallback = () => { const t = $("#bkText"); t.value = text; t.focus(); t.select(); say($("#bkMsg"), "Copy the selected text below to keep it.", ""); };
+    try { navigator.clipboard.writeText(text).then(() => say($("#bkMsg"), "Backup copied.", "ok"), fallback); } catch (err) { fallback(); }
+  });
+  on("#bkRestore", "click", () => {
+    const msg = $("#bkMsg");
+    try {
+      const d = JSON.parse($("#bkText").value);
+      let src;
+      if (d && d.lull === 2 && d.state) src = normalizeState(d.state);
+      else if (d && d.lull === 1 && d.entries) { src = blank(); Object.keys(d.entries).forEach(k => { src.entries[k] = Object.assign({ u: Date.now() }, d.entries[k]); }); if (d.settings) Object.assign(src.meta.settings, d.settings); }
+      else throw new Error("shape");
+      const clean = {}; let count = 0;
+      Object.keys(src.entries).forEach(k => {
+        const e = src.entries[k];
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !e || !TIME_RE.test(e.bed) || !TIME_RE.test(e.wake)) return;
+        clean[k] = { bed: e.bed, wake: e.wake, latency: clamp(+e.latency || 0, 0, 240), awake: clamp(+e.awake || 0, 0, 480), quality: clamp(+e.quality || 3, 1, 5), tags: Array.isArray(e.tags) ? e.tags.filter(t => TAGS.some(x => x.id === t)) : [], note: String(e.note || "").slice(0, 300), u: Date.now() };
+        count++;
+      });
+      if (!count) throw new Error("empty");
+      Object.assign(S.entries, clean);
+      if (src.caf) Object.keys(src.caf).forEach(k => { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && src.caf[k] && Array.isArray(src.caf[k].items)) S.caf[k] = { u: Date.now(), items: src.caf[k].items.filter(i => i && +i.t >= 0 && +i.t < 1440 && +i.mg > 0).map(i => ({ id: String(i.id || Math.random()), t: +i.t, mg: +i.mg, name: String(i.name || "Drink").slice(0, 30) })) }; });
+      const st = src.meta.settings; if (st && TIME_RE.test(st.wake) && st.need >= 5 && st.need <= 11) { cfg.wake = st.wake; cfg.need = +st.need; }
+      if (src.meta.profile && src.meta.profile.done) Object.assign(prof(), { name: String(src.meta.profile.name || "").slice(0, 30), goal: GOALS.some(g => g[0] === src.meta.profile.goal) ? src.meta.profile.goal : "learn", issues: (src.meta.profile.issues || []).filter(i => ISSUES.some(x => x[0] === i)), done: true });
+      touchMeta(); commit(); renderMe(); say(msg, "Restored " + count + " nights.", "ok");
+    } catch (err) { say(msg, "That doesn't look like a Lull backup.", "err"); }
+  });
+  let clearArm = false;
+  on("#bkClear", "click", () => {
+    const b = $("#bkClear");
+    if (!clearArm) { clearArm = true; b.textContent = "Press again to delete everything"; setTimeout(() => { clearArm = false; b.textContent = "Delete all my nights"; }, 4000); return; }
+    const now = Date.now(); Object.keys(S.entries).forEach(k => { S.dels[k] = now; });
+    S.entries = {}; clearArm = false; b.textContent = "Delete all my nights"; commit(); renderMe(); say($("#bkMsg"), "All nights deleted.", "ok");
+  });
+
+  /* resize: redraw charts only, so typing in a form is never disturbed */
+  let rz, lastW = window.innerWidth;
+  window.addEventListener("resize", () => {
+    clearTimeout(rz);
+    rz = setTimeout(() => {
+      if (window.innerWidth === lastW) return; lastW = window.innerWidth;
+      if (current === "home") renderKey();
+      else if (current === "insights") { drawMain(); if ($("#clockDetails").open) drawRhythm(); }
+      else if (current === "tools" && toolSub === "energy") { drawEnergy(); renderCaffeine(); }
+    }, 150);
+  });
+
+  /* ================= boot ================= */
+  buildForm();
+  $("#fDate").value = today();
+  $("#jlDate").value = addDays(today(), 7);
+  const start = (location.hash || "").replace("#", "");
+  show(VIEWS.indexOf(start) >= 0 && start !== "log" && start !== "welcome" ? start : "home");
+  setInterval(tickCountdown, 30000);
+  initSync();
+
+  window.__lull = { calc, summarize, tagEffects, sri, chrono, jetPlan, energyModel, permP, mergeState, normalizeState, blank, realList, dataList, csv, focusCandidates, focusDots, plainSummary, get S() { return S; }, SAMPLE };
+})();
+</script>
+
+</html>
