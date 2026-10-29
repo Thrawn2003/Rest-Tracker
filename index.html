@@ -224,11 +224,6 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     <button type="button" data-tab="me">Me</button>
   </nav>
 
-  <div id="sampleBanner" class="banner" hidden>
-    <span><strong>These are example nights.</strong> <span class="soft">Log your own and Lull switches to your real data.</span></span>
-    <button type="button" class="btn small" id="goLog">Log last night</button>
-  </div>
-
   <!-- WELCOME -->
   <section id="v-welcome" class="view" hidden>
     <div class="card onb" id="welcome"></div>
@@ -297,6 +292,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     <div class="card">
       <header><h2>In plain words</h2><p class="small soft" id="sumNote"></p></header>
       <ul class="bul" id="inSummary"></ul>
+      <div class="btn-row"><button type="button" class="btn" id="goLog" hidden>Log last night</button></div>
     </div>
     <div class="card">
       <header><h2>Ask the coach</h2><p class="small soft" id="coachNote"></p></header>
@@ -304,25 +300,26 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       <div class="chat" id="chat" aria-live="polite"></div>
       <form id="coachForm" class="btn-row" style="flex-wrap:nowrap;align-items:flex-end">
         <label class="field" for="coachIn" style="flex:1">Your question
-          <textarea id="coachIn" maxlength="600" style="min-height:48px" placeholder="Why do I wake up tired on Mondays?"></textarea>
+          <textarea id="coachIn" maxlength="600" style="min-height:48px" ></textarea>
         </label>
         <button type="submit" class="btn" id="coachSend">Ask</button>
+        <button type="button" class="btn ghost" id="coachStop" hidden>Stop</button>
       </form>
-      <p class="small soft">The coach is Claude. It sees a short summary of your logged nights when you ask, can be wrong, and does not diagnose.</p>
+      <p class="small soft">Claude answers when it is available, using a short summary of your logged nights. Otherwise Lull answers from its own analysis of your nights. Neither one diagnoses, and either can be wrong.</p>
     </div>
-    <div class="card">
+    <div class="card" id="cChart">
       <header><h2>Your nights</h2><div class="seg" id="metSeg" role="radiogroup" aria-label="Chart"></div></header>
       <div class="seg" id="rangeSeg" role="radiogroup" aria-label="Range"></div>
       <div class="chart" id="chartMain"></div>
       <div class="legend" id="chartLegend"></div>
     </div>
-    <div class="card">
+    <div class="card" id="cHelps">
       <h2>What helps and what hurts</h2>
       <p class="soft small" id="effNote"></p>
       <ul class="ideas" id="effList"></ul>
       <details><summary>Show the numbers</summary><div class="scroll"><table id="effTable"></table></div><div id="corrBox"></div></details>
     </div>
-    <div class="card">
+    <div class="card" id="cClock">
       <h2>Your body clock</h2>
       <div id="clockSum"></div>
       <details id="clockDetails"><summary>Show my rhythm charts</summary>
@@ -434,7 +431,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
             <select id="jlDir"><option value="1">East (you lose hours)</option><option value="-1">West (you gain hours)</option></select>
           </label>
           <label class="field" for="jlHrs">Time zones crossed
-            <input type="number" id="jlHrs" min="1" max="12" step="1" value="5" inputmode="numeric">
+            <input type="number" id="jlHrs" min="1" max="12" step="1" inputmode="numeric">
           </label>
           <label class="field" for="jlDate">Arrival date
             <input type="date" id="jlDate">
@@ -546,6 +543,8 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   const ISSUES = [["caffeine", "I have caffeine in the afternoon"], ["screens", "I use my phone or TV in bed"], ["alcohol", "I use alcohol to unwind"], ["mind", "My mind is busy at night"], ["nap", "I nap during the day"], ["irregular", "My schedule is irregular"], ["room", "My bedroom is too warm, bright or noisy"], ["meal", "I eat late in the evening"]];
   const ISSUE_SHORT = { caffeine: "afternoon caffeine", screens: "using screens in bed", alcohol: "alcohol to unwind", mind: "a busy mind at night", nap: "daytime naps", irregular: "an irregular schedule", room: "a bedroom that is too warm, bright or noisy", meal: "late meals" };
   const ISSUE_TAG = { caffeine: "caffeine", screens: "screens", alcohol: "alcohol", meal: "lateMeal", nap: "nap", mind: "stress" };
+  const LAT_OPTS = [["Under 10 min", 5], ["About 15 min", 15], ["About 30 min", 30], ["45 min or more", 50]];
+  const AWAKE_OPTS = [["Slept through", 0], ["Briefly (about 10 min)", 10], ["Some (about 30 min)", 30], ["A lot (about an hour)", 60]];
   const PATTERNS = {
     p478: { name: "4-7-8", steps: [["Breathe in", 4, 1], ["Hold", 7, 1], ["Breathe out", 8, 0.45]] },
     box: { name: "Box", steps: [["Breathe in", 4, 1], ["Hold", 4, 1], ["Breathe out", 4, 0.45], ["Hold", 4, 0.45]] },
@@ -714,33 +713,13 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   };
   const scoreLabel = v => v >= 85 ? "Excellent" : v >= 70 ? "Good" : v >= 55 ? "Fair" : "Poor";
 
-  const sampleList = () => {
-    let s = 11; const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
-    const out = [], now = new Date();
-    for (let i = 21; i >= 1; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 12);
-      const weekend = d.getDay() === 0 || d.getDay() === 6;
-      const has = { caffeine: rnd() < 0.4, screens: rnd() < 0.55, alcohol: rnd() < 0.2, exercise: rnd() < 0.45, stress: rnd() < 0.3, lateMeal: rnd() < 0.2 };
-      const tags = Object.keys(has).filter(t => has[t]);
-      const bed = Math.round(((weekend ? 1455 : 1395) + (rnd() - 0.5) * 60) / 5) * 5;
-      const wake = Math.round(((weekend ? 510 : 405) + (rnd() - 0.5) * 20) / 5) * 5;
-      const latency = Math.round(12 + (has.caffeine ? 14 : 0) + (has.screens ? 8 : 0) + rnd() * 8);
-      const awake = Math.round(5 + (has.alcohol ? 25 : 0) + (has.stress ? 12 : 0) + rnd() * 10);
-      const quality = clamp(Math.round(4 - (has.caffeine ? 0.8 : 0) - (has.alcohol ? 1 : 0) - (has.stress ? 0.6 : 0) + (has.exercise ? 0.5 : 0) + (rnd() - 0.5)), 1, 5);
-      out.push(decorate(key(d), { bed: hhmm(bed), wake: hhmm(wake), latency, awake, quality, tags, note: "" }));
-    }
-    return out;
-  };
-  const SAMPLE = sampleList();
 
   let cacheV = -1, cacheReal = [];
   const realList = () => {
     if (cacheV !== ver) { cacheReal = withScores(Object.keys(S.entries).sort().map(k => decorate(k, S.entries[k]))); cacheV = ver; }
     return cacheReal;
   };
-  let sampleScored = false;
-  const usingSample = () => Object.keys(S.entries).length === 0;
-  const dataList = () => { if (!usingSample()) return realList(); if (!sampleScored) { withScores(SAMPLE); sampleScored = true; } return SAMPLE; };
+  const dataList = () => realList();
 
   const summarize = list => {
     const need = cfg.need * 60;
@@ -981,7 +960,6 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   }
   const needsWelcome = () => !prof().done && Object.keys(S.entries).length === 0;
   function rerender() {
-    $("#sampleBanner").hidden = !(usingSample() && current === "insights");
     ({ welcome: renderWelcome, home: renderHome, log: renderLogView, insights: renderInsights, tools: renderTools, me: renderMe }[current])();
   }
 
@@ -1075,10 +1053,15 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       el.innerHTML = '<header><h2>Last night</h2><button type="button" class="link" data-quickedit>Edit</button></header><div class="sumrow"><div class="ring">' + ringSvg(sc.total, sc.total >= 70 ? "var(--accent)" : "var(--dawn)") + '<div class="val"><span>' + sc.total + "<small>" + scoreLabel(sc.total) + '</small></span></div></div><div><p><strong>' + dur(todayE.c.asleep) + '</strong> asleep</p><p class="soft small">' + clock(toMin(todayE.bed)) + " to " + clock(toMin(todayE.wake)) + " · felt " + QUALITY[todayE.quality - 1].toLowerCase() + "</p>" + weakestLine(sc) + "</div></div>";
       return;
     }
-    const d = defaults(), tags = relevantTags(), auto = cafHint(today());
+    const d = defaults(), tags = relevantTags(), auto = cafHint(today()), hist = realList().length >= 3;
+    const near = (opts, v) => opts.reduce((b, o) => Math.abs(o[1] - v) < Math.abs(b[1] - v) ? o : b)[1];
+    const preLat = hist ? near(LAT_OPTS, d.latency) : -1, preAw = hist ? near(AWAKE_OPTS, d.awake) : -1;
+    const seg = (name, opts, pre) => '<div class="seg">' + opts.map(o => '<label><input type="radio" name="' + name + '" value="' + o[1] + '"' + (o[1] === pre ? " checked" : "") + "><span>" + o[0] + "</span></label>").join("") + "</div>";
     el.innerHTML = "<header><h2>How did you sleep?</h2><span class=\"small soft\">" + esc(fmtDate(today())) + "</span></header>" +
       '<div class="row"><label class="field" for="qBed">Went to bed<input type="time" id="qBed" value="' + d.bed + '"></label><label class="field" for="qWake">Woke up<input type="time" id="qWake" value="' + d.wake + '"></label></div>' +
-      '<fieldset><legend>How rested do you feel?</legend><div class="rate">' + QUALITY.map((q, i) => '<label><input type="radio" name="qq" value="' + (i + 1) + '"' + (i === 2 ? " checked" : "") + "><span><b>" + (i + 1) + "</b>" + q + "</span></label>").join("") + "</div></fieldset>" +
+      '<fieldset><legend>How rested do you feel?</legend><div class="rate">' + QUALITY.map((q, i) => '<label><input type="radio" name="qq" value="' + (i + 1) + '"><span><b>' + (i + 1) + "</b>" + q + "</span></label>").join("") + "</div></fieldset>" +
+      '<fieldset><legend>How long did it take to fall asleep?</legend>' + seg("qlat", LAT_OPTS, preLat) + "</fieldset>" +
+      '<fieldset><legend>Did you wake up during the night?</legend>' + seg("qaw", AWAKE_OPTS, preAw) + "</fieldset>" +
       '<fieldset><legend>Yesterday I had (optional)</legend><div class="chips">' + tags.map(t => '<button type="button" class="chip-t" data-qtag="' + t + '" aria-pressed="' + (t === "caffeine" && auto) + '">' + esc(tagById(t).short) + "</button>").join("") + "</div></fieldset>" +
       '<div class="btn-row"><button type="button" class="btn" id="qSave">Save</button><button type="button" class="link" id="qMore">Add details</button><span class="msg" id="qMsg" role="status"></span></div>';
   }
@@ -1091,8 +1074,10 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     return '<svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="' + r + '" fill="none" stroke="var(--surface-2)" stroke-width="10"/><circle cx="60" cy="60" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="10" stroke-linecap="round" stroke-dasharray="' + (c * v / 100).toFixed(1) + " " + c.toFixed(1) + '"/></svg>';
   }
   function saveQuick() {
-    const msg = $("#qMsg"), d = defaults();
-    const f = { date: today(), bed: $("#qBed").value, wake: $("#qWake").value, latency: d.latency, awake: d.awake, quality: +($("#cQuick input[name=qq]:checked") || { value: 3 }).value, tags: $$("#cQuick [data-qtag][aria-pressed=true]").map(b => b.dataset.qtag), note: "" };
+    const msg = $("#qMsg"), pick = n => { const r = $("#cQuick input[name=" + n + "]:checked"); return r ? +r.value : null; };
+    const lat = pick("qlat"), aw = pick("qaw");
+    if (lat == null || aw == null || !pick("qq")) { say(msg, "Tap how rested you feel, how long it took to fall asleep, and whether you woke up.", "err"); return; }
+    const f = { date: today(), bed: $("#qBed").value, wake: $("#qWake").value, latency: lat, awake: aw, quality: pick("qq"), tags: $$("#cQuick [data-qtag][aria-pressed=true]").map(b => b.dataset.qtag), note: "" };
     const err = validate(f);
     if (err) { say(msg, err, "err"); return; }
     if (S.entries[f.date] && S.entries[f.date].note) f.note = S.entries[f.date].note;
@@ -1182,19 +1167,20 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
 
   /* ================= log view ================= */
   function buildForm() {
-    $("#fQual").innerHTML = QUALITY.map((q, i) => '<label><input type="radio" name="qual" value="' + (i + 1) + '"' + (i === 2 ? " checked" : "") + "><span><b>" + (i + 1) + "</b>" + q + "</span></label>").join("");
+    $("#fQual").innerHTML = QUALITY.map((q, i) => '<label><input type="radio" name="qual" value="' + (i + 1) + '"><span><b>' + (i + 1) + "</b>" + q + "</span></label>").join("");
     $("#fTags").innerHTML = TAGS.map(t => '<label><input type="checkbox" name="tag" value="' + t.id + '">' + esc(t.label) + "</label>").join("");
   }
   function readForm() {
     return {
       date: $("#fDate").value, bed: $("#fBed").value, wake: $("#fWake").value,
       latency: clamp(parseInt($("#fLat").value, 10) || 0, 0, 240), awake: clamp(parseInt($("#fAwake").value, 10) || 0, 0, 480),
-      quality: +($("#fQual input:checked") || { value: 3 }).value,
+      quality: +($("#fQual input:checked") || { value: 0 }).value,
       tags: $$("#fTags input:checked").map(i => i.value), note: $("#fNote").value.trim()
     };
   }
   function validate(f) {
     if (!f.date) return "Choose the morning you woke up.";
+    if (!(f.quality >= 1 && f.quality <= 5)) return "Tap how rested you feel.";
     if (!TIME_RE.test(f.bed) || !TIME_RE.test(f.wake)) return "Enter both times.";
     const inBed = calc(Object.assign({ latency: 0, awake: 0 }, f)).inBed;
     if (inBed < 60 || inBed > 16 * 60) return "That's " + dur(inBed) + " in bed. Check that bed and wake times are the right way round.";
@@ -1218,7 +1204,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     $("#fLat").value = e ? e.latency : d.latency;
     $("#fAwake").value = e ? e.awake : d.awake;
     $("#fNote").value = e ? e.note || "" : "";
-    const q = e ? e.quality : (over && over.quality) || 3;
+    const q = e ? e.quality : (over && over.quality) || 0;
     $$("#fQual input").forEach(i => { i.checked = +i.value === q; });
     const auto = !e && cafHint(k), pre = (over && over.tags) || [];
     $$("#fTags input").forEach(i => { i.checked = e ? e.tags.indexOf(i.value) >= 0 : (pre.indexOf(i.value) >= 0 || (auto && i.value === "caffeine")); });
@@ -1252,8 +1238,12 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   }
   function renderInsights() {
     const all = dataList();
-    $("#sumNote").textContent = usingSample() ? "Example data" : "Last 7 nights";
-    $("#inSummary").innerHTML = plainSummary(all).map(x => "<li>" + esc(x.t) + "</li>").join("");
+    const none = noData();
+    ["cChart", "cHelps", "cClock", "weekCmp"].forEach(id => { $("#" + id).hidden = none; });
+    $("#goLog").hidden = !none;
+    $("#sumNote").textContent = none ? "" : "Last 7 nights";
+    $("#inSummary").innerHTML = none ? "<li>You haven't logged any nights yet. Log last night and Lull will describe your sleep here in plain words, then find your patterns as you add more.</li>" : plainSummary(all).map(x => "<li>" + esc(x.t) + "</li>").join("");
+    if (none) { renderCoach(); renderIdeas(); return; }
     renderCoach();
     $("#metSeg").innerHTML = [["score", "Score"], ["hours", "Length"], ["times", "Bed and wake"]].map(m => '<label><input type="radio" name="met" value="' + m[0] + '"' + (metric === m[0] ? " checked" : "") + "><span>" + m[1] + "</span></label>").join("");
     $("#rangeSeg").innerHTML = [7, 14, 30].map(n => '<label><input type="radio" name="range" value="' + n + '"' + (n === range ? " checked" : "") + "><span>" + n + " nights</span></label>").join("");
@@ -1289,7 +1279,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     const word = r => { const a = Math.abs(r); return a < 0.2 ? "No clear link" : (a < 0.4 ? "Weak " : a < 0.6 ? "Moderate " : "Strong ") + (r > 0 ? "positive" : "negative"); };
     const good = list.filter(e => e.quality >= 4);
     let need = "";
-    if (good.length >= 3) { const m = avg(good.map(e => e.c.asleep)); need = '<p style="margin-top:12px">On the ' + good.length + " nights you felt rested or great, you slept " + dur(m) + " on average." + (Math.abs(m - cfg.need * 60) > 20 && !usingSample() ? ' <button type="button" class="link" id="useNeed" data-need="' + (Math.round(m / 15) * 15 / 60) + '">Use this as my goal</button>' : "") + "</p>"; }
+    if (good.length >= 3) { const m = avg(good.map(e => e.c.asleep)); need = '<p style="margin-top:12px">On the ' + good.length + " nights you felt rested or great, you slept " + dur(m) + " on average." + (Math.abs(m - cfg.need * 60) > 20 ? ' <button type="button" class="link" id="useNeed" data-need="' + (Math.round(m / 15) * 15 / 60) + '">Use this as my goal</button>' : "") + "</p>"; }
     $("#corrBox").innerHTML = (pairs.length ? '<div class="scroll" style="margin-top:12px"><table><thead><tr><th>Pair</th><th>r</th><th>Reading</th></tr></thead><tbody>' + pairs.map(p => "<tr><td>" + p[0] + '</td><td class="mono">' + p[1].toFixed(2) + "</td><td>" + word(p[1]) + "</td></tr>").join("") + "</tbody></table></div>" : "") + need;
   }
   function renderClock(all) {
@@ -1519,9 +1509,9 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     try { const A = window.AudioContext || window.webkitAudioContext, c = new A(), o = c.createOscillator(), g = c.createGain(); o.frequency.value = 660; g.gain.value = 0.15; o.connect(g); g.connect(c.destination); o.start(); setTimeout(() => { o.stop(); c.close(); }, 900); } catch (e) {}
   }
   function renderJet() {
-    if (!$("#jlDate").value) $("#jlDate").value = addDays(today(), 7);
-    const east = $("#jlDir").value === "1", hours = clamp(parseInt($("#jlHrs").value, 10) || 0, 1, 12), arrive = $("#jlDate").value || today(), pre = +$("#jlPre").value;
+    const east = $("#jlDir").value === "1", hours = parseInt($("#jlHrs").value, 10), arrive = $("#jlDate").value, pre = +$("#jlPre").value;
     const out = $("#jlOut");
+    if (!(hours >= 1 && hours <= 12) || !arrive) { out.innerHTML = '<p class="soft">Enter how many time zones you cross and your arrival date to see your plan.</p>'; return; }
     const pl = jetPlan(east, hours, arrive, pre);
     const win = (cbt, adv, seek) => {
       const a = seek ? (adv ? cbt : cbt - 240) : (adv ? cbt - 240 : cbt), b = seek ? (adv ? cbt + 180 : cbt) : (adv ? cbt : cbt + 180);
@@ -1570,7 +1560,9 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   function startBreath() { running = true; stepIdx = 0; cycles = 0; $("#breathBtn").textContent = "Stop"; enterStep(); timer = setInterval(tick, 1000); }
 
   /* ================= coach ================= */
+  /* Answers come from Claude (the sample capability) when this view can reach it. Otherwise, or if the call fails, Lull answers from its own analysis of the person's real nights. */
   let chatMsgs = [], coachBusy = false, coachAvail = null, coachCtl = null, coachP = null;
+  const noData = () => Object.keys(S.entries).length === 0;
   function coachContext() {
     const real = realList(), list = real.slice(-21), c = chrono(real), r = sri(real.slice(-30)), p = prof();
     if (!list.length) return "The person has not logged any nights yet. Give general guidance and encourage them to log a few nights.";
@@ -1583,39 +1575,115 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       (r != null ? " Sleep regularity index " + r + "/100." : "") + (c ? " Chronotype midpoint " + hhmm(c.msfsc) + ", social jet lag " + Math.round(c.sjl) + "m." : "") + "\nNights (oldest first):\n" + lines.join("\n");
   }
   const COACH_RULES = "You are Lull's sleep coach inside a sleep tracking app. Use only the logged data below and well-established sleep science (sleep regularity, light timing, caffeine half-life, CBT-I principles). Be specific: cite dates, times and numbers from the data, and tie advice to the person's stated goal. Give at most three concrete, prioritized actions. Say when the data is too thin to conclude, and never present a correlation as proof. You are not a doctor: do not diagnose; if the data or question suggests insomnia lasting months, sleep apnea signs, severe sleepiness or low mood, advise seeing a clinician. Do not suggest sleeping pills or supplements beyond saying to ask a pharmacist or doctor. Write plain text in short paragraphs, no markdown headings or tables, under 220 words.";
+
+  /* ---- built-in coach: answers from the person's own numbers ---- */
+  function localCoach(q) {
+    const real = realList(), need = cfg.need * 60, t = (q || "").toLowerCase(), f = S.meta.focus && FOCUS[S.meta.focus.id];
+    if (!real.length) return "I can't see any logged nights yet, so anything I said about your sleep would be a guess. Log last night (about 20 seconds) and ask again." + (f ? " Until then, your habit for this week is: " + f.title() + "." : "");
+    const last = real.slice(-7), s = summarize(last), prev = real.slice(-14, -7), pv = prev.length >= 3 ? summarize(prev) : null;
+    const free = cfg.free || [], isFree = e => free.indexOf(fromKey(e.key).getDay()) >= 0;
+    const fx = tagEffects(real.slice(-30)).filter(r => r.ok && r.verdict !== "flat" && r.conf !== "Can't tell yet").sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
+    const c = chrono(real);
+    const weakest = e => e.score.parts.slice().sort((a, b) => a.v / a.max - b.v / b.max)[0].n.toLowerCase();
+    const nights = last.length + " night" + (last.length === 1 ? "" : "s");
+
+    if (/weekend|saturday|sunday|days off|social/.test(t)) {
+      const fr = real.filter(isFree), wk = real.filter(e => !isFree(e));
+      if (fr.length < 2 || wk.length < 2) return "To compare weekends with weekdays I need at least 2 nights on your days off and 2 on workdays. You have " + fr.length + " and " + wk.length + " so far. Your days off are set in Me, under Your schedule.";
+      const a = summarize(fr), b = summarize(wk), wshift = avg(fr.map(e => e.c.wakeMin)) - avg(wk.map(e => e.c.wakeMin));
+      return "On days off you go to bed around " + clock(a.bedAvg) + " and wake " + (Math.abs(wshift) < 20 ? "at about the same time as on workdays" : "about " + dur(Math.abs(wshift)) + (wshift >= 0 ? " later" : " earlier") + " than on workdays") + " (workday bedtime: around " + clock(b.bedAvg) + "). You sleep " + dur(a.asleep) + " on days off against " + dur(b.asleep) + " on workdays.\n\n" +
+        (Math.abs(wshift) > 60 ? "A wake time more than an hour different is like flying across time zones every weekend, and it makes Sunday night and Monday morning harder. Try waking within an hour of your weekday time, and get outside in daylight soon after." : "That is a small difference, so your weekends are not hurting your body clock.") + (c && c.sjl > 60 ? "\n\nYour sleep midpoint sits " + dur(c.sjl) + " later on days off." : "");
+    }
+    if (/plan|next (3|three)|tonight|schedule|bedtime/.test(t)) {
+      const B = planBedtime().bed, Bn = bedN(B), cur = s.bedAvg, wake = toMin(cfg.wake), lines = [];
+      let b = cur;
+      for (let i = 0; i < 3; i++) { b = cur > Bn + 15 ? Math.max(Bn, b - 20) : Bn; lines.push(fmtDate(addDays(today(), i)) + ": in bed " + clock(b) + ", up " + clock(wake) + "."); }
+      return "Here are your next three nights, aimed at " + cfg.need + " h of sleep with a " + clock(wake) + " wake-up.\n\n" + lines.join("\n") + "\n\n" +
+        (cur > Bn + 15 ? "You have averaged a " + clock(cur) + " bedtime, so I move you toward " + clock(B) + " in 20-minute steps. Small steps are easier to keep.\n\n" : "") +
+        "Each evening: no caffeine after " + clock(cafCutoff()) + ", screens off an hour before bed, and a 5-minute wind-down 45 minutes before." + (f ? " Your habit this week: " + f.title() + "." : "");
+    }
+    if (/week|review|summary|how am i|how did i|last 7/.test(t)) {
+      const best = last.slice().sort((a, b) => b.score.total - a.score.total)[0], worst = last.slice().sort((a, b) => a.score.total - b.score.total)[0];
+      let out = "Your last " + nights + ": you averaged " + dur(s.asleep) + " asleep (goal " + cfg.need + " h), fell asleep in about " + Math.round(s.latency) + " minutes, and scored " + Math.round(s.score) + " out of 100.";
+      if (pv) { const d = s.score - pv.score; out += " That is " + (Math.abs(d) < 3 ? "about the same as" : d > 0 ? Math.round(d) + " points better than" : Math.round(-d) + " points worse than") + " the week before."; }
+      out += "\n\nBest night: " + fmtDate(best.key) + " (" + best.score.total + "). Hardest night: " + fmtDate(worst.key) + " (" + worst.score.total + ", weakest part: " + weakest(worst) + ").";
+      if (s.wakeSd > 40) out += "\n\nYour wake time varied by about " + Math.round(s.wakeSd) + " minutes. Steadier wake times would help most.";
+      else if (s.asleep < need - 30) out += "\n\nYou were " + dur(need - s.asleep) + " short of your goal each night on average, so an earlier bedtime is the lever.";
+      return out + (f ? "\n\nOne thing to try this week: " + f.title() + "." : "");
+    }
+    if (/caffein|coffee|tea\b|energy drink/.test(t)) {
+      const r = tagEffects(real.slice(-30)).filter(x => x.tag.id === "caffeine")[0], items = cafDay(today()), bed = planBedtime().bed < planBedtime().wake ? planBedtime().bed + 1440 : planBedtime().bed;
+      let out = r && r.ok ? "On nights after late caffeine you took " + Math.round(r.w.l) + " minutes to fall asleep against " + Math.round(r.wo.l) + " without it, and felt " + r.w.q.toFixed(1) + " against " + r.wo.q.toFixed(1) + " out of 5 rested (" + r.nw + " nights vs " + r.nwo + ", " + r.conf.toLowerCase() + ")." : "I don't have enough nights with and without late caffeine to see its effect on you yet. Tick \"Late caffeine\" when you log, and the Tools tab can track your drinks.";
+      out += "\n\nFor your bedtime of " + clock(planBedtime().bed) + ", a last coffee by " + clock(cafCutoff()) + " leaves little in your body.";
+      if (items.length) out += " Based on the drinks you logged today, about " + Math.round(cafAt(items, bed)) + " mg will still be in you at bedtime.";
+      return out;
+    }
+    const causes = [];
+    if (s.asleep < need - 30) causes.push({ w: (need - s.asleep) / 30, t: "You are short on sleep: " + dur(s.asleep) + " a night against your " + cfg.need + " h need, " + dur(s.debt) + " short this week. Try bed at " + clock(s.bedAvg - 20) + ", 20 minutes earlier than your average, for the next few nights." });
+    if (s.wakeSd > 40) causes.push({ w: s.wakeSd / 40, t: "Your wake time moves around by about " + Math.round(s.wakeSd) + " minutes. Pick " + clock(toMin(cfg.wake)) + " and stay within 30 minutes of it every day, weekends included." });
+    if (s.latency > 25) causes.push({ w: s.latency / 25, t: "It takes you about " + Math.round(s.latency) + " minutes to fall asleep. Go to bed when sleepy, keep screens away for the last hour, and get up for a while if you are awake after 20 minutes." });
+    if (s.awake > 30 || s.eff < 0.85) causes.push({ w: Math.max(s.awake / 30, 0.85 / Math.max(s.eff, 0.3)), t: "You spend a lot of time awake in bed (" + Math.round(s.awake) + " minutes awake in the night, " + Math.round(s.eff * 100) + "% of your time in bed asleep). Avoid long lie-ins and keep the bed for sleep." });
+    if (fx.length) { const r = fx[0]; causes.push({ w: 1.2, t: (r.tag.kind === "bad" && r.verdict === "worse" ? "\"" + r.tag.label + "\" goes with worse nights for you" : "\"" + r.tag.label + "\" goes with better nights for you") + " (" + r.nw + " nights vs " + r.nwo + ", " + r.conf.toLowerCase() + "). " + (r.tag.kind === "bad" ? "Try cutting it for a week and compare." : "Keep doing it.") }); }
+    if (c && c.sjl > 60) causes.push({ w: c.sjl / 60, t: "You sleep about " + dur(c.sjl) + " later on days off, which acts like weekly jet lag." });
+    causes.sort((a, b) => b.w - a.w);
+    const lead = /tired|why|wake|exhaust|groggy|fatigue|sleepy|energy|refresh/.test(t) ? "" : "I'm not sure I caught that, so here is what stands out in your data. ";
+    if (!causes.length) return lead + "Your last " + nights + " look healthy: " + dur(s.asleep) + " asleep, " + Math.round(s.latency) + " minutes to fall asleep and a wake time that varies by only " + Math.round(s.wakeSd) + " minutes. If you still feel tired, the cause may not be sleep amount. Daylight, activity and stress matter too, and persistent tiredness or loud snoring with gasping is worth raising with a doctor.";
+    return lead + "From your last " + nights + ", the most likely reasons, in order:\n\n" + causes.slice(0, 3).map((x, i) => (i + 1) + ". " + x.t).join("\n\n") + "\n\nStart with number 1 only. This is general guidance, not a diagnosis.";
+  }
+
   function renderCoach() {
     const chips = [["Why am I tired?", "Looking at my data, what is most likely making me feel tired, and what should I change first?"], ["Review my week", "Give me a short review of my last 7 nights: what went well, what didn't, and one thing to try this week."], ["Plan my next 3 nights", "Plan my next three nights with specific bed and wake times and what to do in the evening."], ["Is my weekend hurting me?", "Compare my weekday and weekend nights. Is my weekend schedule hurting my sleep?"]];
     $("#coachChips").innerHTML = chips.map((c, i) => '<button type="button" class="chip-t" data-chip="' + i + '">' + esc(c[0]) + "</button>").join("");
     $("#coachChips").dataset.prompts = JSON.stringify(chips.map(c => c[1]));
-    $("#coachNote").textContent = usingSample() ? "No logged nights yet, so answers will be general" : "Uses your last " + Math.min(21, realList().length) + " nights";
-    if (coachAvail === null && !coachP) { if (window.claude && window.claude.use) coachP = window.claude.use("sample").then(s => { coachAvail = s || false; coachUi(); }, () => { coachAvail = false; coachUi(); }); else coachAvail = false; }
+    if (coachAvail === null && !coachP) {
+      if (window.claude && window.claude.use) coachP = window.claude.use("sample").then(s => { coachAvail = s || false; coachUi(); }, () => { coachAvail = false; coachUi(); });
+      else coachAvail = false;
+    }
     coachUi();
-    if (!chatMsgs.length) $("#chat").innerHTML = '<div class="bubble ai">Ask me anything about your sleep, or tap a question above. I can see your recent nights, your goal and the patterns Lull found.</div>';
+    if (!chatMsgs.length) $("#chat").innerHTML = '<div class="bubble ai">Ask me anything about your sleep, or tap a question above. I answer from your own logged nights, your goal and the patterns Lull found.</div>';
   }
   function coachUi() {
-    const off = coachAvail === false;
-    $("#coachSend").disabled = off || coachBusy; $("#coachIn").disabled = off;
-    $$("#coachChips button").forEach(b => { b.disabled = off || coachBusy; });
-    if (off) $("#coachNote").textContent = "The coach isn't available in this view";
+    $("#coachSend").disabled = coachBusy; $("#coachStop").hidden = !(coachBusy && coachCtl);
+    $$("#coachChips button").forEach(b => { b.disabled = coachBusy; });
+    $("#coachNote").textContent = (noData() ? "No logged nights yet. " : "Uses your last " + Math.min(21, realList().length) + " nights. ") + (coachAvail ? "Answers by Claude." : coachAvail === false ? "Answers from Lull's built-in analysis." : "Checking for Claude...");
   }
+  const claudeFail = e => {
+    const c = e && e.code;
+    if (c === "not_granted") return "You didn't allow Claude to read your summary, so this answer is from Lull's built-in analysis.";
+    if (c === "rate_limited") return "Claude is busy or your usage limit was reached, so this answer is from Lull's built-in analysis. Try Claude again later.";
+    if (c === "sampling_disabled" || c === "not_declared" || c === "capability_disabled" || c === "capability_removed") return "Claude isn't available for this account here, so this answer is from Lull's built-in analysis.";
+    if (c === "session_expired") return "Your claude.ai session expired. Sign in again to use Claude. This answer is from Lull's built-in analysis.";
+    return "Claude couldn't answer just now, so this answer is from Lull's built-in analysis. You can ask again.";
+  };
   async function ask(q) {
     q = (q || "").trim(); if (!q || coachBusy) return;
-    if (coachAvail === null && coachP) await coachP;
-    if (!coachAvail) return;
     coachBusy = true; coachUi();
     const chat = $("#chat");
     if (!chatMsgs.length) chat.innerHTML = "";
-    chatMsgs.push({ role: "user", content: q });
     const me = document.createElement("div"); me.className = "bubble me"; me.textContent = q; chat.appendChild(me);
     const ai = document.createElement("div"); ai.className = "bubble ai"; ai.textContent = "Thinking..."; chat.appendChild(ai); chat.scrollTop = chat.scrollHeight;
-    const msgs = chatMsgs.map((m, i) => i === 0 ? { role: "user", content: COACH_RULES + "\n\nDATA\n" + coachContext() + "\n\nQUESTION\n" + m.content } : m);
-    try {
-      coachCtl = new AbortController();
-      const res = await coachAvail(msgs, { signal: coachCtl.signal, cache: false, onText: u => { ai.textContent = u.text; chat.scrollTop = chat.scrollHeight; } });
-      ai.textContent = res.text; chatMsgs.push({ role: "assistant", content: res.text });
-    } catch (e) {
-      chatMsgs.pop();
-      ai.textContent = e && e.code === "not_granted" ? "Permission wasn't given, so the coach can't read your summary. You can ask again any time." : e && e.code === "rate_limited" ? "The coach is busy. Wait a minute and try again." : "The coach couldn't answer. Try again in a moment.";
+    let note = "", done = false;
+    if (coachAvail === null && coachP) await coachP;
+    if (coachAvail) {
+      chatMsgs.push({ role: "user", content: q });
+      const msgs = chatMsgs.map((m, i) => i === 0 ? { role: "user", content: COACH_RULES + "\n\nDATA\n" + coachContext() + "\n\nQUESTION\n" + m.content } : m);
+      ai.textContent = "Thinking. Claude can take up to a minute...";
+      try {
+        coachCtl = new AbortController(); coachUi();
+        const res = await coachAvail(msgs, { signal: coachCtl.signal, cache: false, onText: u => { ai.textContent = u.text; chat.scrollTop = chat.scrollHeight; } });
+        ai.textContent = res.text; chatMsgs.push({ role: "assistant", content: res.text }); done = true;
+      } catch (e) {
+        chatMsgs.pop();
+        if (e && e.code === "cancelled") { ai.textContent = (e.text ? e.text + "\n\n" : "") + "Stopped."; done = true; }
+        else if (e && e.text && e.code === "upstream_error") { ai.textContent = e.text + "\n\n(The answer was interrupted. Ask again for the full version.)"; done = true; }
+        else { note = claudeFail(e); if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].indexOf(e && e.code) >= 0) coachAvail = false; }
+      }
+      coachCtl = null;
+    }
+    if (!done) {
+      const a = localCoach(q);
+      ai.textContent = a + (note ? "\n\n(" + note + ")" : "");
+      chatMsgs.push({ role: "user", content: q }, { role: "assistant", content: a });
     }
     coachBusy = false; coachUi(); chat.scrollTop = chat.scrollHeight;
   }
@@ -1699,7 +1767,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   on("#v-home", "click", e => {
     const t = e.target;
     if (t.closest("#qSave")) saveQuick();
-    if (t.closest("#qMore")) openLog(today(), { bed: $("#qBed").value, wake: $("#qWake").value, quality: +($("#cQuick input[name=qq]:checked") || { value: 3 }).value, tags: $$("#cQuick [data-qtag][aria-pressed=true]").map(b => b.dataset.qtag) });
+    if (t.closest("#qMore")) openLog(today(), { bed: $("#qBed").value, wake: $("#qWake").value, quality: +($("#cQuick input[name=qq]:checked") || { value: 0 }).value, tags: $$("#cQuick [data-qtag][aria-pressed=true]").map(b => b.dataset.qtag) });
     const ch = t.closest("[data-qtag]"); if (ch) ch.setAttribute("aria-pressed", ch.getAttribute("aria-pressed") === "true" ? "false" : "true");
     if (t.closest("[data-quickedit]")) openLog(today());
     const gt = t.closest("[data-goto]");
@@ -1751,6 +1819,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     const c = e.target.closest("[data-chip]"); if (c) ask(JSON.parse($("#coachChips").dataset.prompts)[+c.dataset.chip]);
   });
   on("#clockDetails", "toggle", () => { if ($("#clockDetails").open) drawRhythm(); });
+  on("#coachStop", "click", () => { if (coachCtl) coachCtl.abort(); });
   on("#coachForm", "submit", e => { e.preventDefault(); const q = $("#coachIn").value; $("#coachIn").value = ""; ask(q); });
 
   /* tools */
@@ -1850,13 +1919,12 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   /* ================= boot ================= */
   buildForm();
   $("#fDate").value = today();
-  $("#jlDate").value = addDays(today(), 7);
   const start = (location.hash || "").replace("#", "");
   show(VIEWS.indexOf(start) >= 0 && start !== "log" && start !== "welcome" ? start : "home");
   setInterval(tickCountdown, 30000);
   initSync();
 
-  window.__lull = { calc, summarize, tagEffects, sri, chrono, jetPlan, energyModel, permP, mergeState, normalizeState, blank, realList, dataList, csv, focusCandidates, focusDots, plainSummary, get S() { return S; }, SAMPLE };
+  window.__lull = { calc, summarize, tagEffects, sri, chrono, jetPlan, energyModel, permP, mergeState, normalizeState, blank, realList, dataList, csv, focusCandidates, focusDots, plainSummary, localCoach, get S() { return S; } };
 })();
 </script>
 
