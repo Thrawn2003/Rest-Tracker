@@ -516,6 +516,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       <div class="btn-row">
         <button type="button" class="btn small" id="bkRestore">Restore</button>
         <button type="button" class="btn ghost small danger" id="bkClear">Delete all my nights</button>
+        <button type="button" class="btn ghost small danger" id="resetAll">Reset everything</button>
       </div>
     </div>
   </section>
@@ -2209,6 +2210,19 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     if (!clearArm) { clearArm = true; b.textContent = "Press again to delete everything"; setTimeout(() => { clearArm = false; b.textContent = "Delete all my nights"; }, 4000); return; }
     const now = Date.now(); Object.keys(S.entries).forEach(k => { S.dels[k] = now; });
     S.entries = {}; clearArm = false; b.textContent = "Delete all my nights"; commit(); renderMe(); say($("#bkMsg"), "All nights deleted.", "ok");
+  });
+
+  let resetArm = false;
+  on("#resetAll", "click", () => {
+    const b = $("#resetAll");
+    if (!resetArm) { resetArm = true; b.textContent = "Press again: erases nights, profile, chat, settings"; setTimeout(() => { resetArm = false; b.textContent = "Reset everything"; }, 5000); return; }
+    const now = Date.now(), dels = Object.assign({}, S.dels);
+    Object.keys(S.entries).forEach(k => { dels[k] = now; });
+    S = blank(); S.dels = dels; S.meta.u = now; rebind();
+    chatMsgs = []; resetArm = false; onb = { step: 0, name: "", goal: "learn", wake: "07:00", need: 8, issues: [] };
+    ["lull.entries", "lull.settings", "lull.room"].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+    commit(); if (sync.ref) { clearTimeout(sync.timer); push(); }
+    show("welcome");
   });
 
   /* resize: redraw charts only, so typing in a form is never disturbed */
