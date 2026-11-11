@@ -240,6 +240,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
         <span><strong>Make Lull fit you.</strong> <span class="soft">Four quick questions, 30 seconds.</span></span>
         <button type="button" class="btn small" id="goWelcome">Personalize</button>
       </div>
+      <div class="banner" id="cNote" hidden style="flex-direction:column;align-items:flex-start"></div>
       <div class="card lead" id="cQuick"></div>
       <div class="card" id="cTonight"></div>
       <div class="card" id="cFocus"></div>
@@ -606,7 +607,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       u: 0,
       settings: { wake: "07:00", need: 8, h24: false, f: false, half: 5, free: [0, 6] },
       room: {}, exps: [],
-      profile: { name: "", goal: "learn", issues: [], done: false },
+      profile: { name: "", goal: "learn", issues: [], done: false, deep: null },
       focus: null, fl: {}, fhist: [], chat: [], chatV: 2
     }
   });
@@ -684,6 +685,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       const uid = await user.id();
       if (!uid) return;
       sync.ref = db.collection("data/users/" + uid).doc("lull");
+      if (typeof needRemoteReset !== "undefined" && needRemoteReset) { needRemoteReset = false; await push(); renderDataNote(); return; }
       const snap = await sync.ref.get();
       if (snap.exists) {
         const remote = normalizeState(JSON.parse(JSON.stringify(snap.data())));
@@ -981,41 +983,130 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   }
 
   /* ================= welcome ================= */
-  let onb = { step: 0, name: "", goal: "learn", wake: "07:00", need: 8, issues: [] };
+  /* A longer setup: who you are, your schedule, how you sleep now, daily habits, bedroom and health. The answers seed your goal, habit, issues and gentle health notes, and are kept so progress can be shown against where you started. */
+  const ONB_LAST = 7;
+  const OQ = {
+    age: [["Under 18", "u18"], ["18 to 29", "18"], ["30 to 44", "30"], ["45 to 64", "45"], ["65 or older", "65"]],
+    routine: [["Regular daytime hours", "day"], ["Student", "student"], ["Shifts or nights", "shift"], ["Parent or caregiver", "carer"], ["Irregular hours", "irregular"], ["Retired or flexible", "flex"]],
+    need: [[7, 7], [7.5, 7.5], [8, 8], [8.5, 8.5], [9, 9]].map(x => [x[0] + " h", x[1]]),
+    lat: [["Under 10 min", "5"], ["About 15 min", "15"], ["About 30 min", "30"], ["45 min or more", "50"]],
+    awake: [["Sleep through", "0"], ["Briefly (about 10 min)", "10"], ["Some (about 30 min)", "30"], ["A lot (about an hour)", "60"]],
+    rested: QUALITY.map((q, i) => [q, String(i + 1)]),
+    dur: [["Under a month", "0"], ["1 to 3 months", "1"], ["3 months or more", "3"], ["As long as I remember", "always"]],
+    caf: [["None", "0"], ["1 cup", "1"], ["2 to 3 cups", "2"], ["4 or more", "4"]],
+    cafLast: [["Before noon", "11"], ["Noon to 2 pm", "13"], ["2 to 5 pm", "16"], ["After 5 pm", "19"]],
+    alc: [["Never", "0"], ["A few times a month", "1"], ["Most weeks", "2"], ["Most days", "3"]],
+    ex: [["Rarely", "0"], ["1 to 2 times a week", "1"], ["3 or more times", "3"]],
+    nap: [["Never", "0"], ["Sometimes", "1"], ["Most days", "2"]],
+    light: [["Rarely", "0"], ["Sometimes", "1"], ["Most days", "2"]],
+    screens: [["Never", "0"], ["Sometimes", "1"], ["Most nights", "2"]],
+    share: [["I share my bed with a partner", "partner"], ["A pet sleeps on the bed", "pet"], ["Children wake me", "kids"], ["My room is noisy", "noise"], ["My room is too bright", "bright"], ["My room is too warm", "warm"]],
+    health: [["Loud snoring or gasping at night", "snore"], ["Restless or uncomfortable legs in the evening", "rls"], ["Pain or discomfort that disturbs sleep", "pain"], ["Medicines that affect my sleep", "meds"]],
+    drive: [["No", "0"], ["Sometimes", "1"], ["Often", "2"]],
+    stress: [["Low", "1"], ["Medium", "2"], ["High", "3"]]
+  };
+  const newOnb = () => {
+    const p = prof(), d = (p.deep && p.deep.raw) || {};
+    return { step: 0, name: p.name || "", issues: (p.issues || []).slice(), issuesTouched: !!(p.deep && p.deep.raw), needTouched: !!d.need,
+      a: Object.assign({ age: "", routine: "", goal: p.goal || "learn", wake: cfg.wake, bed: "", freeWake: "", need: cfg.need, lat: "", awake: "", rested: "", dur: "", caf: "", cafLast: "", alc: "", ex: "", nap: "", light: "", screens: "", share: [], health: [], drive: "", stress: "" }, d) };
+  };
+  let onb = newOnb();
+  const defaultNeed = age => age === "u18" ? 9 : age === "65" ? 7.5 : 8;
+  function deriveIssues(a) {
+    const o = [];
+    if (+a.caf >= 2 || +a.cafLast >= 14) o.push("caffeine");
+    if (+a.screens >= 1) o.push("screens");
+    if (+a.alc >= 2) o.push("alcohol");
+    if (+a.stress >= 3) o.push("mind");
+    if (+a.nap >= 1) o.push("nap");
+    if (["shift", "irregular", "carer"].indexOf(a.routine) >= 0) o.push("irregular");
+    if (["pet", "kids", "noise", "bright", "warm"].some(x => a.share.indexOf(x) >= 0)) o.push("room");
+    return o;
+  }
+  function deriveFlags(a) {
+    const f = [];
+    if (a.health.indexOf("snore") >= 0) f.push("Loud snoring or gasping at night can be a sign of sleep apnea. It is common and treatable, and a doctor can arrange a sleep study.");
+    if (a.health.indexOf("rls") >= 0) f.push("Restless legs in the evening can have a treatable cause such as low iron. Ask a doctor about a ferritin blood test.");
+    if (+a.drive >= 1) f.push("Being dangerously sleepy while driving or at work is a safety issue. Please see a doctor, and don't drive when drowsy.");
+    if ((a.dur === "3" || a.dur === "always") && (+a.lat >= 30 || +a.awake >= 30)) f.push("Trouble sleeping for three months or more is chronic insomnia. CBT-I is the first-line treatment, so ask a doctor about it.");
+    if (a.health.indexOf("pain") >= 0 || a.health.indexOf("meds") >= 0) f.push("Pain, or medicines that affect sleep, are worth discussing with your doctor or pharmacist, who can often adjust the timing or the options.");
+    if (+a.stress >= 3) f.push("If stress or low mood is affecting your days as well as your nights, a doctor or therapist can help.");
+    return f;
+  }
   function renderWelcome() {
-    const el = $("#welcome"), steps = 4;
-    const dots = '<div class="steps-dots" aria-hidden="true">' + [0, 1, 2, 3].map(i => '<i class="' + (i <= onb.step ? "on" : "") + '"></i>').join("") + "</div>";
+    const el = $("#welcome"), a = onb.a, st = onb.step;
+    const dots = '<div class="steps-dots" aria-hidden="true">' + Array.from({ length: ONB_LAST + 1 }, (_, i) => '<i class="' + (i <= st ? "on" : "") + '"></i>').join("") + "</div>";
+    const seg = (key, label, hint) => '<fieldset><legend>' + label + '</legend><div class="seg">' + OQ[key].map(o => '<label><input type="radio" name="oq_' + key + '" value="' + o[1] + '"' + (String(a[key]) === String(o[1]) ? " checked" : "") + "><span>" + o[0] + "</span></label>").join("") + "</div>" + (hint ? '<p class="small soft">' + hint + "</p>" : "") + "</fieldset>";
+    const multi = (key, label) => '<fieldset><legend>' + label + '</legend><div class="choices">' + OQ[key].map(o => '<button type="button" class="choice" data-multi="' + key + "|" + o[1] + '" aria-pressed="' + (a[key].indexOf(o[1]) >= 0) + '">' + o[0] + "</button>").join("") + "</div></fieldset>";
+    const time = (id, label, v) => '<label class="field" for="' + id + '">' + label + '<input type="time" id="' + id + '" value="' + v + '"></label>';
     let body = "";
-    if (onb.step === 0) {
-      body = "<h1>Let's get you sleeping better</h1><p class=\"soft\">Four quick questions so Lull can fit you. You can change any answer later.</p>" +
+    if (st === 0) {
+      body = "<h1>Let's get you sleeping better</h1><p class=\"soft\">A few minutes of questions now means advice that fits you from day one. Skip anything you'd rather not answer. You can change every answer later.</p>" +
         '<label class="field" for="onName">What should I call you? (optional)<input type="text" id="onName" maxlength="30" value="' + esc(onb.name) + '"></label>' +
-        '<fieldset><legend>What would you most like to change?</legend><div class="choices">' + GOALS.map(g => '<button type="button" class="choice" data-goal="' + g[0] + '" aria-pressed="' + (onb.goal === g[0]) + '">' + g[1] + "</button>").join("") + "</div></fieldset>";
-    } else if (onb.step === 1) {
-      body = "<h1>Your schedule</h1><p class=\"soft\">Lull works out your bedtime from these two answers.</p>" +
-        '<label class="field" for="onWake">When do you need to wake up?<input type="time" id="onWake" value="' + onb.wake + '"></label>' +
-        '<fieldset><legend>How much sleep do you need?</legend><div class="seg" id="onNeed">' + [7, 7.5, 8, 8.5, 9].map(n => '<label><input type="radio" name="onneed" value="' + n + '"' + (onb.need === n ? " checked" : "") + "><span>" + n + " h</span></label>").join("") + '</div><p class="small soft">Most adults need 7 to 9 hours. Not sure? Keep 8. Lull learns your real need from your nights.</p></fieldset>';
-    } else if (onb.step === 2) {
-      body = "<h1>Does any of this sound like you?</h1><p class=\"soft\">Tick anything that applies. It helps pick your first habit.</p>" +
+        seg("age", "How old are you?") + seg("routine", "Which describes your days best?");
+    } else if (st === 1) {
+      body = "<h1>What would you most like to change?</h1><p class=\"soft\">This decides what Lull highlights first.</p>" +
+        '<div class="choices">' + GOALS.map(g => '<button type="button" class="choice" data-goal="' + g[0] + '" aria-pressed="' + (a.goal === g[0]) + '">' + g[1] + "</button>").join("") + "</div>";
+    } else if (st === 2) {
+      body = "<h1>Your schedule</h1><p class=\"soft\">Lull works out your bedtime from your wake time and how much sleep you need.</p>" +
+        '<div class="row">' + time("onWake", "Wake-up time on workdays", a.wake) + time("onBed", "Usual bedtime on workdays", a.bed) + time("onFree", "Wake-up time on days off", a.freeWake) + "</div>" +
+        seg("need", "How much sleep do you need?", "Most adults need 7 to 9 hours" + (a.age ? "; a good starting point for you is " + defaultNeed(a.age) + " h" : "") + ". Not sure? Keep it as is; Lull learns your real need from your nights.");
+    } else if (st === 3) {
+      body = "<h1>How you sleep right now</h1><p class=\"soft\">This is your starting point, so Lull can show how far you've come.</p>" +
+        seg("lat", "How long does it usually take you to fall asleep?") + seg("awake", "Do you wake up during the night?") + seg("rested", "How do you usually feel when you wake up?") + seg("dur", "How long has sleep been a problem?");
+    } else if (st === 4) {
+      body = "<h1>Daily habits</h1><p class=\"soft\">The things that most often move sleep.</p>" +
+        seg("caf", "Caffeinated drinks per day") + seg("cafLast", "When is your last one, usually?") + seg("alc", "Alcohol") + seg("ex", "Exercise") + seg("nap", "Daytime naps") + seg("light", "Time outside in the morning light") + seg("screens", "Phone or TV in bed");
+    } else if (st === 5) {
+      body = "<h1>Your bedroom and body</h1><p class=\"soft\">Optional, and it stays on your device and your own account. Tap whatever applies.</p>" +
+        multi("share", "Your sleeping space") + multi("health", "Anything like this?") + seg("drive", "Do you get dangerously sleepy while driving or at work?") + seg("stress", "How stressed have you felt lately?");
+    } else if (st === 6) {
+      if (!onb.issuesTouched) onb.issues = deriveIssues(a);
+      body = "<h1>Does any of this sound like you?</h1><p class=\"soft\">Based on your answers I ticked a few. Add or remove any.</p>" +
         '<div class="choices">' + ISSUES.map(i => '<button type="button" class="choice" data-issue="' + i[0] + '" aria-pressed="' + (onb.issues.indexOf(i[0]) >= 0) + '">' + i[1] + "</button>").join("") + "</div>";
     } else {
       applyOnboarding();
-      const f = S.meta.focus, def = FOCUS[f.id], p = planBedtime();
+      const f = S.meta.focus, def = FOCUS[f.id], p = planBedtime(), flags = (prof().deep && prof().deep.flags) || [];
       body = "<h1>" + (onb.name ? esc(onb.name) + ", you" : "You") + "'re set</h1>" +
         '<div class="fact"><span class="eyebrow">Your bedtime</span><span class="v">' + clock(p.bed) + '</span><span class="small soft">To wake at ' + clock(p.wake) + " with " + cfg.need + " hours of sleep.</span></div>" +
         '<div class="fact"><span class="eyebrow">Your first habit</span><span class="v">' + esc(def.title()) + '</span><span class="small soft">' + esc(f.reason) + " " + esc(def.how) + "</span></div>" +
+        (flags.length ? '<div class="fact"><span class="eyebrow">Worth raising with a doctor</span><ul class="small" style="margin:6px 0 0;padding-left:1.1rem">' + flags.map(x => "<li>" + esc(x) + "</li>").join("") + "</ul></div>" : "") +
         '<p class="small soft">Log each morning (about 20 seconds). After a few nights Lull starts finding your patterns.</p>';
     }
-    const nav = '<div class="btn-row">' + (onb.step > 0 && onb.step < 3 ? '<button type="button" class="btn ghost" data-onb="back">Back</button>' : "") +
-      (onb.step < 3 ? '<button type="button" class="btn" data-onb="next">Next</button>' : '<button type="button" class="btn wide" data-onb="finish">Take me to Lull</button>') + "</div>" +
-      (onb.step < 3 ? '<button type="button" class="link" data-onb="skip" style="align-self:flex-start">Skip setup</button>' : "");
-    el.innerHTML = dots + body + nav;
+    const nav = '<div class="btn-row">' + (st > 0 && st < ONB_LAST ? '<button type="button" class="btn ghost" data-onb="back">Back</button>' : "") +
+      (st < ONB_LAST ? '<button type="button" class="btn" data-onb="next">' + (st === ONB_LAST - 1 ? "Finish" : "Next") + "</button>" : '<button type="button" class="btn wide" data-onb="finish">Take me to Lull</button>') + "</div>" +
+      (st < ONB_LAST ? '<button type="button" class="link" data-onb="skip" style="align-self:flex-start">Skip setup</button>' : "");
+    el.innerHTML = '<p class="small soft">Step ' + (st + 1) + " of " + (ONB_LAST + 1) + "</p>" + dots + body + nav;
   }
   function applyOnboarding() {
-    const p = prof();
-    p.name = onb.name.trim(); p.goal = onb.goal; p.issues = onb.issues.slice(); p.done = true;
-    cfg.wake = onb.wake; cfg.need = onb.need;
+    const p = prof(), a = onb.a;
+    p.name = onb.name.trim(); p.goal = a.goal; p.issues = onb.issues.slice(); p.done = true;
+    if (TIME_RE.test(a.wake)) cfg.wake = a.wake;
+    cfg.need = +a.need || 8;
+    p.deep = { raw: JSON.parse(JSON.stringify(a)), flags: deriveFlags(a), ack: false, at: today() };
     S.meta.focus = null; touchMeta(); commit();
     const c = focusCandidates()[0]; startFocus(c.id, c.reason);
+  }
+  /* what the person told us at setup, in one line for the coach */
+  function deepLine() {
+    const d = prof().deep && prof().deep.raw; if (!d) return "";
+    const L = (key, v) => { const o = OQ[key].filter(x => String(x[1]) === String(v))[0]; return o ? o[0] : ""; };
+    const parts = [];
+    if (d.age) parts.push("age " + L("age", d.age));
+    if (d.routine) parts.push("days: " + L("routine", d.routine).toLowerCase());
+    if (d.bed) parts.push("usual workday bedtime " + d.bed);
+    if (d.freeWake) parts.push("wakes " + d.freeWake + " on days off");
+    if (d.lat) parts.push("said it takes " + L("lat", d.lat).toLowerCase() + " to fall asleep when they started");
+    if (d.awake) parts.push("night waking at start: " + L("awake", d.awake).toLowerCase());
+    if (d.dur) parts.push("sleep problem for: " + L("dur", d.dur).toLowerCase());
+    if (d.caf) parts.push("caffeine: " + L("caf", d.caf).toLowerCase() + " a day, last " + L("cafLast", d.cafLast || "").toLowerCase());
+    if (d.alc) parts.push("alcohol: " + L("alc", d.alc).toLowerCase());
+    if (d.ex) parts.push("exercise: " + L("ex", d.ex).toLowerCase());
+    if (d.stress) parts.push("stress: " + L("stress", d.stress).toLowerCase());
+    if ((d.share || []).length) parts.push("sleep space: " + d.share.map(x => L("share", x).toLowerCase()).join(", "));
+    if ((d.health || []).length) parts.push("health notes: " + d.health.map(x => L("health", x).toLowerCase()).join(", "));
+    if (+d.drive >= 1) parts.push("sleepy while driving or at work: " + L("drive", d.drive).toLowerCase());
+    return parts.length ? "What they said at setup: " + parts.join("; ") + "." : "";
   }
 
   /* ================= home ================= */
@@ -1035,6 +1126,10 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     else line = morning ? "Let's log last night." : "Aim for " + clock(planBedtime().bed) + " tonight.";
     $("#hello").innerHTML = "<h1>" + hello() + name + "</h1><p class=\"soft\">" + line + (st >= 2 ? " <span class=\"pill good\">" + st + " nights in a row</span>" : "") + "</p>";
     $("#cPersonalize").hidden = prof().done;
+    const dp = prof().deep, fl = dp && dp.flags || [], nt = $("#cNote");
+    nt.hidden = !(fl.length && !dp.ack);
+    if (!nt.hidden) nt.innerHTML = '<strong>Worth raising with a doctor</strong><ul class="small" style="margin:0;padding-left:1.1rem">' + fl.map(x => "<li>" + esc(x) + "</li>").join("") + '</ul><button type="button" class="btn ghost small" data-ackflags>Got it</button>';
+    nt.style.order = 0;
     renderQuick(todayE); renderTonight(); renderFocus(); renderKey();
     /* order: log first in the morning, tonight first later */
     $("#cQuick").style.order = morning || !todayE ? (morning ? 1 : 3) : 3;
@@ -1057,8 +1152,8 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     const same = all.filter(e => ((cfg.free || []).indexOf(fromKey(e.key).getDay()) >= 0) === free).slice(-7);
     const last = all.slice(-7), typ = same.length >= 2 ? same : last;
     return {
-      bed: typ.length ? hhmm(median(typ.map(e => e.c.bedN))) : hhmm(planBedtime().bed),
-      wake: same.length >= 2 ? hhmm(median(same.map(e => e.c.wakeMin))) : cfg.wake,
+      bed: typ.length ? hhmm(median(typ.map(e => e.c.bedN))) : (prof().deep && prof().deep.raw && TIME_RE.test(prof().deep.raw.bed) ? prof().deep.raw.bed : hhmm(planBedtime().bed)),
+      wake: same.length >= 2 ? hhmm(median(same.map(e => e.c.wakeMin))) : (free && prof().deep && prof().deep.raw && TIME_RE.test(prof().deep.raw.freeWake) ? prof().deep.raw.freeWake : cfg.wake),
       latency: last.length >= 3 ? clamp(Math.round(avg(last.map(e => e.latency))), 0, 90) : 15,
       awake: last.length >= 3 ? clamp(Math.round(avg(last.map(e => e.awake))), 0, 120) : 0
     };
@@ -1167,7 +1262,9 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       pill = tiny ? '<span class="pill flat">Steady</span>' : better ? '<span class="pill good">Improving</span>' : '<span class="pill bad">Slipping</span>';
       pill += ' <span class="small soft">was ' + K.fmt(b) + " the week before</span>";
     } else pill = '<span class="small soft">From your last ' + last7.length + " nights</span>";
-    el.innerHTML = '<header><h2>' + K.label + '</h2><span class="eyebrow">Last 7 nights</span></header><div class="sumrow"><span class="keyv">' + K.fmt(a) + "</span><div>" + pill + '</div></div><div class="chart" id="chartKey"></div>';
+    const raw = prof().deep && prof().deep.raw, g0 = raw && ({ fall: raw.lat, stay: raw.awake, rested: raw.rested }[prof().goal]);
+    const startTxt = g0 !== "" && g0 != null && !isNaN(+g0) ? '<p class="small soft">When you started you said: ' + K.fmt(+g0) + "</p>" : "";
+    el.innerHTML = '<header><h2>' + K.label + '</h2><span class="eyebrow">Last 7 nights</span></header><div class="sumrow"><span class="keyv">' + K.fmt(a) + "</span><div>" + pill + "</div></div>" + startTxt + '<div class="chart" id="chartKey"></div>';
     drawKey(real.slice(-14), K);
   }
   function drawKey(list, K) {
@@ -1622,7 +1719,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     const bedT = planBedtime();
     const bedAbs = bedT.bed < bedT.wake ? bedT.bed + 1440 : bedT.bed;
     const goal = GOALS.filter(g => g[0] === p.goal)[0][1];
-    return "Name to call them: " + (p.name || "(none given)") + ". Their main goal: " + goal + ". Things they said apply: " + ((p.issues || []).map(i => ISSUES.filter(x => x[0] === i)[0][1]).join("; ") || "none given") + ". Current weekly habit: " + (S.meta.focus && FOCUS[S.meta.focus.id] ? FOCUS[S.meta.focus.id].title() : "none") + ".\n" +
+    return "Name to call them: " + (p.name || "(none given)") + ". " + deepLine() + " Their main goal: " + goal + ". Things they said apply: " + ((p.issues || []).map(i => ISSUES.filter(x => x[0] === i)[0][1]).join("; ") || "none given") + ". Current weekly habit: " + (S.meta.focus && FOCUS[S.meta.focus.id] ? FOCUS[S.meta.focus.id].title() : "none") + ".\n" +
       "Sleep goal: " + cfg.need + " h, target wake " + cfg.wake + ", computed bedtime " + hhmm(bedT.bed) + ". Free days (no alarm): " + (cfg.free || []).map(d => DAYS[d]).join("/") + ". Today is " + today() + " (" + DAYS[new Date().getDay()] + "), local time " + hhmm(nowMin()) + "." +
       (caf.length ? " Caffeine logged today: " + caf.map(d => hhmm(d.t) + " " + d.mg + "mg").join(", ") + " (about " + Math.round(cafAt(caf, bedAbs)) + "mg left at bedtime, half-life " + cfg.half + "h)." : "") + "\n" +
       "Last 14 nights: avg asleep " + Math.round(s.asleep) + "m, efficiency " + Math.round(s.eff * 100) + "%, avg minutes to fall asleep " + Math.round(s.latency) + ", avg score " + Math.round(s.score) + ", bedtime spread +/-" + Math.round(s.bedSd) + "m, wake spread +/-" + Math.round(s.wakeSd) + "m, 14-night sleep debt " + Math.round(s.debt) + "m." +
@@ -2044,27 +2141,35 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   on(".tabs", "click", e => { const b = e.target.closest("button[data-tab]"); if (b) { if (b.dataset.tab === "tools") toolSub = null; show(b.dataset.tab); } });
   on("#logBtn", "click", () => openLog(today()));
   on("#goLog", "click", () => openLog(today()));
-  on("#goWelcome", "click", () => { onb = { step: 0, name: prof().name || "", goal: prof().goal || "learn", wake: cfg.wake, need: cfg.need, issues: (prof().issues || []).slice() }; show("welcome"); });
-  on("#redoSetup", "click", () => { onb = { step: 0, name: prof().name || "", goal: prof().goal || "learn", wake: cfg.wake, need: cfg.need, issues: (prof().issues || []).slice() }; show("welcome"); });
+  on("#goWelcome", "click", () => { onb = newOnb(); show("welcome"); });
+  on("#redoSetup", "click", () => { onb = newOnb(); show("welcome"); });
   on("#logBack", "click", () => show(lastMain));
 
   /* welcome */
   on("#welcome", "click", e => {
-    const g = e.target.closest("[data-goal]"), i = e.target.closest("[data-issue]"), n = e.target.closest("[data-onb]");
-    if (g) { onb.goal = g.dataset.goal; renderWelcome(); }
-    if (i) { const id = i.dataset.issue, at = onb.issues.indexOf(id); if (at >= 0) onb.issues.splice(at, 1); else onb.issues.push(id); renderWelcome(); }
+    const g = e.target.closest("[data-goal]"), i = e.target.closest("[data-issue]"), m = e.target.closest("[data-multi]"), n = e.target.closest("[data-onb]");
+    if (g) { onb.a.goal = g.dataset.goal; renderWelcome(); }
+    if (i) { const id = i.dataset.issue, at = onb.issues.indexOf(id); onb.issuesTouched = true; if (at >= 0) onb.issues.splice(at, 1); else onb.issues.push(id); renderWelcome(); }
+    if (m) { const [k, v] = m.dataset.multi.split("|"), arr = onb.a[k], at = arr.indexOf(v); if (at >= 0) arr.splice(at, 1); else arr.push(v); renderWelcome(); }
     if (n) {
-      const a = n.dataset.onb;
-      if (a === "next") { onb.step = Math.min(3, onb.step + 1); renderWelcome(); window.scrollTo(0, 0); }
-      if (a === "back") { onb.step = Math.max(0, onb.step - 1); renderWelcome(); }
-      if (a === "skip") { const p = prof(); p.done = true; touchMeta(); commit(); show("home"); }
-      if (a === "finish") show("home");
+      const x = n.dataset.onb;
+      if (x === "next") { onb.step = Math.min(ONB_LAST, onb.step + 1); renderWelcome(); window.scrollTo(0, 0); }
+      if (x === "back") { onb.step = Math.max(0, onb.step - 1); renderWelcome(); window.scrollTo(0, 0); }
+      if (x === "skip") { const p = prof(); p.done = true; touchMeta(); commit(); show("home"); }
+      if (x === "finish") show("home");
     }
   });
   on("#welcome", "input", e => {
-    if (e.target.id === "onName") onb.name = e.target.value;
-    if (e.target.id === "onWake" && TIME_RE.test(e.target.value)) onb.wake = e.target.value;
-    if (e.target.name === "onneed") onb.need = +e.target.value;
+    const t = e.target;
+    if (t.id === "onName") onb.name = t.value;
+    if (t.id === "onWake" && TIME_RE.test(t.value)) onb.a.wake = t.value;
+    if (t.id === "onBed" && TIME_RE.test(t.value)) onb.a.bed = t.value;
+    if (t.id === "onFree" && TIME_RE.test(t.value)) onb.a.freeWake = t.value;
+    if (t.name && t.name.indexOf("oq_") === 0) {
+      const k = t.name.slice(3); onb.a[k] = t.value;
+      if (k === "need") onb.needTouched = true;
+      if (k === "age" && !onb.needTouched) onb.a.need = defaultNeed(t.value);
+    }
   });
 
   /* home */
@@ -2075,6 +2180,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     const ch = t.closest("[data-qtag]"); if (ch) ch.setAttribute("aria-pressed", ch.getAttribute("aria-pressed") === "true" ? "false" : "true");
     if (t.closest("[data-quickedit]")) openLog(today());
     if (t.closest("[data-readout]")) { show("coach"); ask(READOUT_Q); }
+    if (t.closest("[data-ackflags]")) { prof().deep.ack = true; touchMeta(); commit(); renderHome(); }
     const gt = t.closest("[data-goto]");
     if (gt) { if (gt.dataset.goto === "calm") { toolSub = "calm"; show("tools"); } else { const l = $("#stepsList"); l.hidden = !l.hidden; } }
     const fc = t.closest("[data-focus]");
@@ -2219,7 +2325,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     const now = Date.now(), dels = Object.assign({}, S.dels);
     Object.keys(S.entries).forEach(k => { dels[k] = now; });
     S = blank(); S.dels = dels; S.meta.u = now; rebind();
-    chatMsgs = []; resetArm = false; onb = { step: 0, name: "", goal: "learn", wake: "07:00", need: 8, issues: [] };
+    chatMsgs = []; resetArm = false; onb = newOnb();
     ["lull.entries", "lull.settings", "lull.room"].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
     commit(); if (sync.ref) { clearTimeout(sync.timer); push(); }
     show("welcome");
