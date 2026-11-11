@@ -66,8 +66,8 @@ p { margin: 0; }
 .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; }
 .brand svg { width: 28px; height: 28px; color: var(--accent); }
 .syncpill { font: 500 0.72rem var(--font-data); color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; margin-left: 4px; }
-.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 14px; }
-.tabs button { font: 600 0.95rem var(--font-body); color: var(--ink-soft); background: none; border: 0; padding: 11px 6px; border-radius: 10px; cursor: pointer; min-height: 44px; }
+.tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 14px; }
+.tabs button { font: 600 0.88rem var(--font-body); color: var(--ink-soft); background: none; border: 0; padding: 11px 6px; border-radius: 10px; cursor: pointer; min-height: 44px; }
 .tabs button[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(10, 14, 40, 0.15); }
 
 /* surfaces */
@@ -203,6 +203,8 @@ td.mono { font-size: 0.82rem; }
 .bubble { padding: 12px 14px; border-radius: 14px; max-width: 94%; white-space: pre-wrap; overflow-wrap: anywhere; }
 .bubble.me { align-self: flex-end; background: var(--accent); color: var(--accent-ink); }
 .bubble.ai { align-self: flex-start; background: var(--surface-2); }
+.bubble.act { align-self: stretch; background: none; border: 1px dashed var(--accent); color: var(--ink); font: 500 0.85rem var(--font-data); padding: 8px 12px; }
+#v-coach .chat { min-height: 34vh; max-height: 58vh; }
 
 footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 16px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -219,6 +221,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
 
   <nav class="tabs" aria-label="Sections">
     <button type="button" data-tab="home">Home</button>
+    <button type="button" data-tab="coach">Coach</button>
     <button type="button" data-tab="insights">Insights</button>
     <button type="button" data-tab="tools">Tools</button>
     <button type="button" data-tab="me">Me</button>
@@ -287,6 +290,24 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     </form>
   </section>
 
+  <!-- COACH -->
+  <section id="v-coach" class="view" hidden>
+    <div class="card">
+      <header><h2>Luna, your sleep coach</h2><button type="button" class="link" id="chatClear">New chat</button></header>
+      <p class="small soft" id="coachNote"></p>
+      <div class="chips" id="coachChips"></div>
+      <div class="chat" id="chat" aria-live="polite"></div>
+      <form id="coachForm" class="btn-row" style="flex-wrap:nowrap;align-items:flex-end">
+        <label class="field" for="coachIn" style="flex:1">Ask Luna
+          <textarea id="coachIn" maxlength="600" style="min-height:48px"></textarea>
+        </label>
+        <button type="submit" class="btn" id="coachSend">Ask</button>
+        <button type="button" class="btn ghost" id="coachStop" hidden>Stop</button>
+      </form>
+      <p class="small soft">Luna answers with Claude when it's available; otherwise she uses Lull's built-in analysis of your logged nights. With Claude she can also log nights, log caffeine, set your weekly habit and change schedule settings, but only when you ask her to. She isn't a doctor and can be wrong.</p>
+    </div>
+  </section>
+
   <!-- INSIGHTS -->
   <section id="v-insights" class="view" hidden>
     <div class="card">
@@ -294,18 +315,10 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       <ul class="bul" id="inSummary"></ul>
       <div class="btn-row"><button type="button" class="btn" id="goLog" hidden>Log last night</button></div>
     </div>
-    <div class="card">
-      <header><h2>Ask the coach</h2><p class="small soft" id="coachNote"></p></header>
-      <div class="chips" id="coachChips"></div>
-      <div class="chat" id="chat" aria-live="polite"></div>
-      <form id="coachForm" class="btn-row" style="flex-wrap:nowrap;align-items:flex-end">
-        <label class="field" for="coachIn" style="flex:1">Your question
-          <textarea id="coachIn" maxlength="600" style="min-height:48px" ></textarea>
-        </label>
-        <button type="submit" class="btn" id="coachSend">Ask</button>
-        <button type="button" class="btn ghost" id="coachStop" hidden>Stop</button>
-      </form>
-      <p class="small soft">Claude answers when it is available, using a short summary of your logged nights. Otherwise Lull answers from its own analysis of your nights. Neither one diagnoses, and either can be wrong.</p>
+    <div class="card" id="cHeat">
+      <header><h2>Three months at a glance</h2><p class="small soft">One square per night's score</p></header>
+      <div class="chart" id="chartHeat"></div>
+      <div class="legend"><span><i style="background:var(--surface-2)"></i>Not logged</span><span><i style="background:var(--accent);opacity:0.35"></i>Poor</span><span><i style="background:var(--accent);opacity:0.65"></i>Fair</span><span><i style="background:var(--accent)"></i>Great</span></div>
     </div>
     <div class="card" id="cChart">
       <header><h2>Your nights</h2><div class="seg" id="metSeg" role="radiogroup" aria-label="Chart"></div></header>
@@ -593,7 +606,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       settings: { wake: "07:00", need: 8, h24: false, f: false, half: 5, free: [0, 6] },
       room: {}, exps: [],
       profile: { name: "", goal: "learn", issues: [], done: false },
-      focus: null, fl: {}, fhist: []
+      focus: null, fl: {}, fhist: [], chat: []
     }
   });
   const normalizeState = s => {
@@ -606,6 +619,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       o.meta.room = m.room || {}; o.meta.exps = m.exps || [];
       Object.assign(o.meta.profile, m.profile || {});
       o.meta.focus = m.focus || null; o.meta.fl = m.fl || {}; o.meta.fhist = m.fhist || [];
+      o.meta.chat = Array.isArray(m.chat) ? m.chat.filter(x => x && typeof x.t === "string" && ["u", "a", "x"].indexOf(x.r) >= 0).slice(-40) : [];
     }
     return o;
   };
@@ -674,6 +688,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
         const merged = mergeState(S, remote);
         const changed = JSON.stringify(merged) !== JSON.stringify(remote);
         S = merged; rebind(); store.set("lull.v2", S);
+        chatMsgs = (S.meta.chat || []).slice(-40);
         if (current === "welcome" && prof().done) show("home"); else if (current !== "log" && current !== "welcome") rerender();
         if (changed) await push(); else setSync("synced");
       } else if (Object.keys(S.entries).length || Object.keys(S.caf).length || prof().done) await push();
@@ -942,7 +957,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   }
 
   /* ================= navigation ================= */
-  const MAIN = ["home", "insights", "tools", "me"];
+  const MAIN = ["home", "coach", "insights", "tools", "me"];
   const VIEWS = MAIN.concat(["welcome", "log"]);
   let current = "home", lastMain = "home";
   function show(tab) {
@@ -960,7 +975,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   }
   const needsWelcome = () => !prof().done && Object.keys(S.entries).length === 0;
   function rerender() {
-    ({ welcome: renderWelcome, home: renderHome, log: renderLogView, insights: renderInsights, tools: renderTools, me: renderMe }[current])();
+    ({ welcome: renderWelcome, home: renderHome, log: renderLogView, coach: renderCoach, insights: renderInsights, tools: renderTools, me: renderMe }[current])();
   }
 
   /* ================= welcome ================= */
@@ -1050,7 +1065,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     const el = $("#cQuick");
     if (todayE) {
       const sc = todayE.score;
-      el.innerHTML = '<header><h2>Last night</h2><button type="button" class="link" data-quickedit>Edit</button></header><div class="sumrow"><div class="ring">' + ringSvg(sc.total, sc.total >= 70 ? "var(--accent)" : "var(--dawn)") + '<div class="val"><span>' + sc.total + "<small>" + scoreLabel(sc.total) + '</small></span></div></div><div><p><strong>' + dur(todayE.c.asleep) + '</strong> asleep</p><p class="soft small">' + clock(toMin(todayE.bed)) + " to " + clock(toMin(todayE.wake)) + " · felt " + QUALITY[todayE.quality - 1].toLowerCase() + "</p>" + weakestLine(sc) + "</div></div>";
+      el.innerHTML = '<header><h2>Last night</h2><button type="button" class="link" data-quickedit>Edit</button></header><div class="sumrow"><div class="ring">' + ringSvg(sc.total, sc.total >= 70 ? "var(--accent)" : "var(--dawn)") + '<div class="val"><span>' + sc.total + "<small>" + scoreLabel(sc.total) + '</small></span></div></div><div><p><strong>' + dur(todayE.c.asleep) + '</strong> asleep</p><p class="soft small">' + clock(toMin(todayE.bed)) + " to " + clock(toMin(todayE.wake)) + " · felt " + QUALITY[todayE.quality - 1].toLowerCase() + "</p>" + weakestLine(sc) + '<div class="btn-row" style="margin-top:6px"><button type="button" class="btn ghost small" data-readout>Morning readout from Luna</button></div></div></div>';
       return;
     }
     const d = defaults(), tags = relevantTags(), auto = cafHint(today()), hist = realList().length >= 3;
@@ -1239,12 +1254,12 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   function renderInsights() {
     const all = dataList();
     const none = noData();
-    ["cChart", "cHelps", "cClock", "weekCmp"].forEach(id => { $("#" + id).hidden = none; });
+    ["cChart", "cHelps", "cClock", "weekCmp", "cHeat"].forEach(id => { $("#" + id).hidden = none; });
     $("#goLog").hidden = !none;
     $("#sumNote").textContent = none ? "" : "Last 7 nights";
     $("#inSummary").innerHTML = none ? "<li>You haven't logged any nights yet. Log last night and Lull will describe your sleep here in plain words, then find your patterns as you add more.</li>" : plainSummary(all).map(x => "<li>" + esc(x.t) + "</li>").join("");
-    if (none) { renderCoach(); renderIdeas(); return; }
-    renderCoach();
+    if (none) { renderIdeas(); return; }
+    drawHeat(all);
     $("#metSeg").innerHTML = [["score", "Score"], ["hours", "Length"], ["times", "Bed and wake"]].map(m => '<label><input type="radio" name="met" value="' + m[0] + '"' + (metric === m[0] ? " checked" : "") + "><span>" + m[1] + "</span></label>").join("");
     $("#rangeSeg").innerHTML = [7, 14, 30].map(n => '<label><input type="radio" name="range" value="' + n + '"' + (n === range ? " checked" : "") + "><span>" + n + " nights</span></label>").join("");
     drawMain();
@@ -1400,6 +1415,34 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
         if (!pr[0]) return;
         svg.appendChild(mk("rect", { x: X(pr[0].c.onset + pr[1]), y: y + 2, width: Math.max(2, X(pr[0].c.wakeMin + pr[1]) - X(pr[0].c.onset + pr[1])), height: rh - 4, rx: 3, fill: "var(--accent)" }));
       });
+    }
+    g.appendChild(svg);
+  }
+  function drawHeat(all) {
+    const g = $("#chartHeat"); if (!g) return; g.innerHTML = "";
+    if (!all.length) return;
+    const by = {}; all.forEach(e => { by[ord(e.key)] = e; });
+    const W = Math.max(280, g.clientWidth || 320), m = { l: 26, t: 16 };
+    const weeks = Math.min(16, Math.max(8, Math.floor((W - m.l) / 19)));
+    const cs = Math.floor((W - m.l - (weeks - 1) * 3) / weeks), step = cs + 3;
+    const endO = ord(today()), endSat = endO + (6 - fromKey(today()).getDay());
+    const start = endSat - weeks * 7 + 1;
+    const H = m.t + 7 * step;
+    const svg = mk("svg", { width: W, height: H, role: "img", "aria-label": "Sleep score for the last " + weeks + " weeks, one square per night" });
+    const dl = mk("g", { "class": "ax" });
+    [["M", 1], ["W", 3], ["F", 5]].forEach(p => dl.appendChild(mk("text", { x: m.l - 8, y: m.t + p[1] * step + cs - 2, "text-anchor": "end" }, p[0])));
+    svg.appendChild(dl);
+    let lastMo = new Date(Date.UTC(1970, 0, 1) + (start - 7) * DAY0).getUTCMonth();
+    for (let w = 0; w < weeks; w++) {
+      for (let d = 0; d < 7; d++) {
+        const o = start + w * 7 + d; if (o > endO) continue;
+        const date = new Date(Date.UTC(1970, 0, 1) + o * DAY0);
+        if (d === 0 && date.getUTCMonth() !== lastMo) { lastMo = date.getUTCMonth(); const tl = mk("g", { "class": "ax" }); tl.appendChild(mk("text", { x: m.l + w * step, y: 10 }, date.toLocaleDateString([], { month: "short", timeZone: "UTC" }))); svg.appendChild(tl); }
+        const e = by[o];
+        const r = mk("rect", { x: m.l + w * step, y: m.t + d * step, width: cs, height: cs, rx: 3, fill: e ? "var(--accent)" : "var(--surface-2)", opacity: e ? (0.25 + 0.75 * e.score.total / 100).toFixed(2) : 1 });
+        r.appendChild(mk("title", {}, e ? fmtDate(e.key) + ": score " + e.score.total : date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) + ": not logged"));
+        svg.appendChild(r);
+      }
     }
     g.appendChild(svg);
   }
@@ -1559,22 +1602,34 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   }
   function startBreath() { running = true; stepIdx = 0; cycles = 0; $("#breathBtn").textContent = "Stop"; enterStep(); timer = setInterval(tick, 1000); }
 
-  /* ================= coach ================= */
-  /* Answers come from Claude (the sample capability) when this view can reach it. Otherwise, or if the call fails, Lull answers from its own analysis of the person's real nights. */
-  let chatMsgs = [], coachBusy = false, coachAvail = null, coachCtl = null, coachP = null;
+  /* ================= coach: Luna ================= */
+  /* Luna answers with Claude (the sample capability) when this view can reach it; with tools, she can also read the full log and make changes the person asks for. Otherwise Lull answers from its own analysis of the logged nights. */
+  let chatMsgs = (S.meta.chat || []).slice(-40);
+  let coachBusy = false, coachAvail = null, coachToolsOK = false, coachCtl = null, coachP = null;
   const noData = () => Object.keys(S.entries).length === 0;
-  function coachContext() {
-    const real = realList(), list = real.slice(-21), c = chrono(real), r = sri(real.slice(-30)), p = prof();
+  const READOUT_Q = "Give me a morning readout: how was last night by the numbers, how does it compare with my recent week, and one specific thing I should do today?";
+  function saveChat() { S.meta.chat = chatMsgs.slice(-40); touchMeta(); commit(); }
+
+  const nightLine = e => [e.key, DAYS[fromKey(e.key).getDay()], "bed " + e.bed, "wake " + e.wake, "fall asleep " + e.latency + "m", "awake " + e.awake + "m", "asleep " + Math.round(e.c.asleep) + "m", "eff " + Math.round(e.c.eff * 100) + "%", "rested " + e.quality + "/5", "score " + e.score.total, e.tags.length ? "habits: " + e.tags.join("+") : ""].join(", ");
+
+  function coachContext(lean) {
+    const real = realList(), list = real.slice(lean ? -7 : -21), c = chrono(real), r = sri(real.slice(-30)), p = prof();
     if (!list.length) return "The person has not logged any nights yet. Give general guidance and encourage them to log a few nights.";
-    const s = summarize(list.slice(-14));
-    const lines = list.map(e => [e.key, DAYS[fromKey(e.key).getDay()], "bed " + e.bed, "wake " + e.wake, "fall asleep " + e.latency + "m", "awake " + e.awake + "m", "asleep " + Math.round(e.c.asleep) + "m", "eff " + Math.round(e.c.eff * 100) + "%", "rested " + e.quality + "/5", "score " + e.score.total, e.tags.length ? "habits: " + e.tags.join("+") : ""].join(", "));
+    const s = summarize(real.slice(-14));
+    const caf = cafDay(today());
+    const bedT = planBedtime();
+    const bedAbs = bedT.bed < bedT.wake ? bedT.bed + 1440 : bedT.bed;
     const goal = GOALS.filter(g => g[0] === p.goal)[0][1];
-    return "Their main goal: " + goal + ". Things they said apply: " + ((p.issues || []).map(i => ISSUES.filter(x => x[0] === i)[0][1]).join("; ") || "none given") + ". Current weekly habit: " + (S.meta.focus && FOCUS[S.meta.focus.id] ? FOCUS[S.meta.focus.id].title() : "none") + ".\n" +
-      "Sleep goal: " + cfg.need + " h, target wake " + cfg.wake + ". Free days (no alarm): " + (cfg.free || []).map(d => DAYS[d]).join("/") + ".\n" +
+    return "Name to call them: " + (p.name || "(none given)") + ". Their main goal: " + goal + ". Things they said apply: " + ((p.issues || []).map(i => ISSUES.filter(x => x[0] === i)[0][1]).join("; ") || "none given") + ". Current weekly habit: " + (S.meta.focus && FOCUS[S.meta.focus.id] ? FOCUS[S.meta.focus.id].title() : "none") + ".\n" +
+      "Sleep goal: " + cfg.need + " h, target wake " + cfg.wake + ", computed bedtime " + hhmm(bedT.bed) + ". Free days (no alarm): " + (cfg.free || []).map(d => DAYS[d]).join("/") + ". Today is " + today() + " (" + DAYS[new Date().getDay()] + "), local time " + hhmm(nowMin()) + "." +
+      (caf.length ? " Caffeine logged today: " + caf.map(d => hhmm(d.t) + " " + d.mg + "mg").join(", ") + " (about " + Math.round(cafAt(caf, bedAbs)) + "mg left at bedtime, half-life " + cfg.half + "h)." : "") + "\n" +
       "Last 14 nights: avg asleep " + Math.round(s.asleep) + "m, efficiency " + Math.round(s.eff * 100) + "%, avg minutes to fall asleep " + Math.round(s.latency) + ", avg score " + Math.round(s.score) + ", bedtime spread +/-" + Math.round(s.bedSd) + "m, wake spread +/-" + Math.round(s.wakeSd) + "m, 14-night sleep debt " + Math.round(s.debt) + "m." +
-      (r != null ? " Sleep regularity index " + r + "/100." : "") + (c ? " Chronotype midpoint " + hhmm(c.msfsc) + ", social jet lag " + Math.round(c.sjl) + "m." : "") + "\nNights (oldest first):\n" + lines.join("\n");
+      (r != null ? " Sleep regularity index " + r + "/100." : "") + (c ? " Chronotype midpoint " + hhmm(c.msfsc) + ", social jet lag " + Math.round(c.sjl) + "m." : "") +
+      "\nMost recent nights (oldest first):\n" + list.map(nightLine).join("\n");
   }
-  const COACH_RULES = "You are Lull's sleep coach inside a sleep tracking app. Use only the logged data below and well-established sleep science (sleep regularity, light timing, caffeine half-life, CBT-I principles). Be specific: cite dates, times and numbers from the data, and tie advice to the person's stated goal. Give at most three concrete, prioritized actions. Say when the data is too thin to conclude, and never present a correlation as proof. You are not a doctor: do not diagnose; if the data or question suggests insomnia lasting months, sleep apnea signs, severe sleepiness or low mood, advise seeing a clinician. Do not suggest sleeping pills or supplements beyond saying to ask a pharmacist or doctor. Write plain text in short paragraphs, no markdown headings or tables, under 220 words.";
+
+  const COACH_RULES = "You are Luna, the sleep coach inside Lull, a sleep tracking app. You are warm, encouraging and plainspoken, never preachy. Ground every answer in the person's logged data below and well-established sleep science (sleep regularity, light timing, caffeine half-life, CBT-I principles). Be specific: cite dates, times and numbers from the data, and tie advice to their stated goal. Give at most three concrete, prioritized actions; often one is better. Say when the data is too thin to conclude, and never present a correlation as proof. You are not a doctor: do not diagnose; if the data or question suggests insomnia lasting months, sleep apnea signs, severe sleepiness or low mood, advise seeing a clinician. Do not recommend sleeping pills or supplements beyond saying to ask a pharmacist or doctor. Write plain conversational text, no markdown headings, bullets or tables, under 200 words unless the person asks for more.";
+  const COACH_TOOL_RULES = " You have tools. Use get_nights when you need more nights or more detail than the summary. log_night, update_settings, set_weekly_habit and log_caffeine change the person's real data: use them only when the person clearly asked for that change in this conversation, with values they gave or confirmed, never invented ones, and afterwards say plainly what you changed. If log_night reports that a night already exists, ask the person before overwriting.";
 
   /* ---- built-in coach: answers from the person's own numbers ---- */
   function localCoach(q) {
@@ -1587,6 +1642,17 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     const weakest = e => e.score.parts.slice().sort((a, b) => a.v / a.max - b.v / b.max)[0].n.toLowerCase();
     const nights = last.length + " night" + (last.length === 1 ? "" : "s");
 
+    if (/readout|last night|this morning/.test(t)) {
+      const e = real[real.length - 1], d7 = real.slice(-8, -1), s7 = d7.length >= 3 ? summarize(d7) : null;
+      const sc = e.score, w = sc.parts.slice().sort((a, b) => a.v / a.max - b.v / b.max)[0];
+      let out = (e.key === today() ? "Last night" : "Your latest night (" + fmtDate(e.key) + ")") + ": " + dur(e.c.asleep) + " asleep from " + clock(toMin(e.bed)) + " to " + clock(toMin(e.wake)) + ", " + e.latency + " minutes to drop off, score " + sc.total + " (" + scoreLabel(sc.total).toLowerCase() + ").";
+      if (s7) { const d = e.c.asleep - s7.asleep; out += " That is " + (Math.abs(d) < 15 ? "right on your recent average." : dur(Math.abs(d)) + (d > 0 ? " more" : " less") + " than your recent average."); }
+      out += "\n\n" + (w.v / w.max < 0.85 ? "Weakest part: " + w.n.toLowerCase() + "." : "No weak spot worth chasing.");
+      const tip = e.quality <= 2 ? "Take it gently today: get daylight this morning, keep caffeine before " + clock(cafCutoff()) + ", and don't go to bed extra early tonight. Keep " + clock(planBedtime().bed) + " so sleep pressure rebuilds properly." : e.latency > 25 ? "Tonight, start winding down 45 minutes before " + clock(planBedtime().bed) + " and keep screens out of the last hour." : "Keep tonight steady: in bed by " + clock(planBedtime().bed) + ", up at " + clock(toMin(cfg.wake)) + ".";
+      out += "\n\nFor today: " + tip;
+      if (f) out += " Your weekly habit: " + f.title() + ".";
+      return out;
+    }
     if (/weekend|saturday|sunday|days off|social/.test(t)) {
       const fr = real.filter(isFree), wk = real.filter(e => !isFree(e));
       if (fr.length < 2 || wk.length < 2) return "To compare weekends with weekdays I need at least 2 nights on your days off and 2 on workdays. You have " + fr.length + " and " + wk.length + " so far. Your days off are set in Me, under Your schedule.";
@@ -1631,61 +1697,233 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     return lead + "From your last " + nights + ", the most likely reasons, in order:\n\n" + causes.slice(0, 3).map((x, i) => (i + 1) + ". " + x.t).join("\n\n") + "\n\nStart with number 1 only. This is general guidance, not a diagnosis.";
   }
 
+  /* ---- tools Luna can use when Claude runs her ---- */
+  function buildCoachTools(progress, actReceipt) {
+    const num = (v, lo, hi) => { const n = Math.round(Number(v)); return isFinite(n) ? clamp(n, lo, hi) : null; };
+    const timeOk = v => TIME_RE.test(String(v || ""));
+    return [
+      {
+        name: "get_nights",
+        description: "Returns the person's logged nights as text rows: date, weekday, bed and wake times, minutes to fall asleep, minutes awake, time asleep, efficiency, rested 1-5, sleep score, habit tags. Use it when you need more nights or more detail than the summary in your instructions.",
+        inputSchema: { type: "object", properties: { days: { type: "integer", description: "How many most recent nights to return, 1-90. Default 30." } } },
+        execute(input) {
+          progress("reading the log");
+          const n = num(input.days, 1, 90) || 30;
+          const rows = realList().slice(-n);
+          return rows.length ? rows.map(nightLine).join("\n") : "No nights logged yet.";
+        }
+      },
+      {
+        name: "log_night",
+        description: "Saves one night in the person's sleep log and returns it with its sleep score. Only call it when the person clearly asked to record a night and gave the times. If a night already exists for that date it refuses unless overwrite is true; ask the person before overwriting.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            date: { type: "string", description: "The morning they woke up, YYYY-MM-DD. Default: today." },
+            bed: { type: "string", description: "Time they got into bed, 24-hour HH:MM." },
+            wake: { type: "string", description: "Time they woke for good, 24-hour HH:MM." },
+            minutes_to_fall_asleep: { type: "integer", description: "0-240. Default 15." },
+            minutes_awake_in_night: { type: "integer", description: "0-480. Default 0." },
+            rested_1_to_5: { type: "integer", description: "1 drained to 5 great. Default 3." },
+            habits: { type: "array", items: { type: "string", enum: TAGS.map(x => x.id) }, description: "Habit tags that applied the day before." },
+            note: { type: "string" },
+            overwrite: { type: "boolean" }
+          },
+          required: ["bed", "wake"]
+        },
+        execute(input) {
+          progress("saving the night");
+          const date = /^\d{4}-\d{2}-\d{2}$/.test(String(input.date || "")) ? String(input.date) : today();
+          if (date > today()) throw new Error("That date is in the future.");
+          if (S.entries[date] && input.overwrite !== true) {
+            const old = realList().filter(x => x.key === date)[0];
+            throw new Error("A night for " + date + " already exists: " + (old ? nightLine(old) : date) + ". Ask the person whether to overwrite it, then call again with overwrite true.");
+          }
+          const f = {
+            date, bed: String(input.bed || ""), wake: String(input.wake || ""),
+            latency: num(input.minutes_to_fall_asleep, 0, 240), awake: num(input.minutes_awake_in_night, 0, 480),
+            quality: num(input.rested_1_to_5, 1, 5),
+            tags: Array.isArray(input.habits) ? input.habits.map(String).filter(x => TAGS.some(g => g.id === x)) : [],
+            note: String(input.note || "").slice(0, 300)
+          };
+          if (f.latency == null) f.latency = 15;
+          if (f.awake == null) f.awake = 0;
+          if (f.quality == null) f.quality = 3;
+          if (!timeOk(f.bed) || !timeOk(f.wake)) throw new Error("bed and wake must be 24-hour HH:MM times.");
+          const err = validate(f);
+          if (err) throw new Error(err);
+          S.entries[date] = { bed: f.bed, wake: f.wake, latency: f.latency, awake: f.awake, quality: f.quality, tags: f.tags, note: f.note, u: Date.now() };
+          commit();
+          const sc = realList().filter(x => x.key === date)[0];
+          actReceipt("Logged " + fmtDate(date) + ": " + dur(sc.c.asleep) + " asleep, score " + sc.score.total);
+          return { saved: true, night: nightLine(sc) };
+        }
+      },
+      {
+        name: "update_settings",
+        description: "Changes the person's schedule settings when they ask: target wake-up time, hours of sleep they need, caffeine half-life. Returns the new settings and the recomputed bedtime. Only change fields the person asked to change.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            wake_time: { type: "string", description: "24-hour HH:MM." },
+            sleep_need_hours: { type: "number", description: "5 to 11." },
+            caffeine_half_life_hours: { type: "number", enum: [4, 5, 6.5, 8] }
+          }
+        },
+        execute(input) {
+          progress("updating settings");
+          const changed = [];
+          if (input.wake_time != null) { if (!timeOk(input.wake_time)) throw new Error("wake_time must be 24-hour HH:MM."); cfg.wake = String(input.wake_time); changed.push("wake " + clock(toMin(cfg.wake))); }
+          if (input.sleep_need_hours != null) { const v = Number(input.sleep_need_hours); if (!(v >= 5 && v <= 11)) throw new Error("sleep_need_hours must be between 5 and 11."); cfg.need = Math.round(v * 4) / 4; changed.push("sleep need " + cfg.need + " h"); }
+          if (input.caffeine_half_life_hours != null) { const v = Number(input.caffeine_half_life_hours); if ([4, 5, 6.5, 8].indexOf(v) < 0) throw new Error("caffeine_half_life_hours must be 4, 5, 6.5 or 8."); cfg.half = v; changed.push("caffeine half-life " + v + " h"); }
+          if (!changed.length) throw new Error("Nothing to change: pass at least one field.");
+          touchMeta(); commit();
+          actReceipt("Settings changed: " + changed.join(", "));
+          return { wake: cfg.wake, sleep_need_hours: cfg.need, caffeine_half_life_hours: cfg.half, new_bedtime: hhmm(planBedtime().bed) };
+        }
+      },
+      {
+        name: "set_weekly_habit",
+        description: "Sets the person's one-habit-for-a-week focus, shown on their Home tab, when they ask for it. habit_id must be one of: " + Object.keys(FOCUS).map(k => k + " (" + FOCUS[k].title() + ")").join("; ") + ".",
+        inputSchema: { type: "object", properties: { habit_id: { type: "string", enum: Object.keys(FOCUS) } }, required: ["habit_id"] },
+        execute(input) {
+          progress("setting the weekly habit");
+          const id = String(input.habit_id || "");
+          if (!FOCUS[id]) throw new Error("Unknown habit_id. Use one of: " + Object.keys(FOCUS).join(", "));
+          pickFocus(id);
+          actReceipt("Weekly habit set: " + FOCUS[id].title());
+          return { set: true, habit: FOCUS[id].title() };
+        }
+      },
+      {
+        name: "log_caffeine",
+        description: "Adds a caffeinated drink to today's caffeine log when the person says they had one. Returns the estimated milligrams still in their body at bedtime.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            time: { type: "string", description: "24-hour HH:MM. Default: now." },
+            mg: { type: "integer", description: "5-500. Coffee is about 95, espresso 65, tea 45, cola 35, energy drink 150." },
+            name: { type: "string", description: "What the drink was, e.g. Coffee." }
+          },
+          required: ["mg"]
+        },
+        execute(input) {
+          progress("logging the drink");
+          const mg = num(input.mg, 5, 500);
+          if (mg == null) throw new Error("mg must be a number between 5 and 500.");
+          const t = timeOk(input.time) ? toMin(input.time) : nowMin();
+          const name = String(input.name || "Drink").slice(0, 30);
+          const k = today();
+          S.caf[k] = { u: Date.now(), items: cafDay(k).concat([{ id: Date.now() + "" + Math.floor(Math.random() * 1000), t, mg, name }]) };
+          commit();
+          const p = planBedtime(), bedAbs = p.bed < p.wake ? p.bed + 1440 : p.bed;
+          const atBed = Math.round(cafAt(cafDay(k), bedAbs));
+          actReceipt("Logged " + name + ", " + mg + " mg at " + clock(t));
+          return { logged: true, estimated_mg_at_bedtime: atBed, bedtime: hhmm(p.bed) };
+        }
+      }
+    ];
+  }
+
+  function bubble(cls, text) { const el = document.createElement("div"); el.className = "bubble " + cls; el.textContent = text; return el; }
+  const scrollChat = () => { const c = $("#chat"); c.scrollTop = c.scrollHeight; };
+  function renderChatLog() {
+    const chat = $("#chat");
+    if (!chatMsgs.length) {
+      chat.innerHTML = '<div class="bubble ai">' + esc("Hi" + (prof().name ? " " + prof().name : "") + ", I'm Luna. Ask me anything about your sleep, or tap a question above. I can see your logged nights, your goal and the patterns Lull found" + (coachToolsOK ? ", and I can log nights or change settings when you ask" : "") + ".") + "</div>";
+      return;
+    }
+    chat.innerHTML = "";
+    chatMsgs.forEach(m => chat.appendChild(bubble(m.r === "u" ? "me" : m.r === "x" ? "act" : "ai", m.r === "x" ? "✓ " + m.t : m.t)));
+    scrollChat();
+  }
+
   function renderCoach() {
-    const chips = [["Why am I tired?", "Looking at my data, what is most likely making me feel tired, and what should I change first?"], ["Review my week", "Give me a short review of my last 7 nights: what went well, what didn't, and one thing to try this week."], ["Plan my next 3 nights", "Plan my next three nights with specific bed and wake times and what to do in the evening."], ["Is my weekend hurting me?", "Compare my weekday and weekend nights. Is my weekend schedule hurting my sleep?"]];
+    const chips = [];
+    if (S.entries[today()]) chips.push(["Morning readout", READOUT_Q]);
+    chips.push(
+      ["Why am I tired?", "Looking at my data, what is most likely making me feel tired, and what should I change first?"],
+      ["Review my week", "Give me a short review of my last 7 nights: what went well, what didn't, and one thing to try this week."],
+      ["Plan my next 3 nights", "Plan my next three nights with specific bed and wake times and what to do in the evening."],
+      ["Is my weekend hurting me?", "Compare my weekday and weekend nights. Is my weekend schedule hurting my sleep?"]
+    );
     $("#coachChips").innerHTML = chips.map((c, i) => '<button type="button" class="chip-t" data-chip="' + i + '">' + esc(c[0]) + "</button>").join("");
     $("#coachChips").dataset.prompts = JSON.stringify(chips.map(c => c[1]));
     if (coachAvail === null && !coachP) {
-      if (window.claude && window.claude.use) coachP = window.claude.use("sample").then(s => { coachAvail = s || false; coachUi(); }, () => { coachAvail = false; coachUi(); });
+      if (window.claude && window.claude.use) coachP = window.claude.use("sample").then(async s => {
+        coachAvail = s || false;
+        if (s) { try { coachToolsOK = !!(await s.limits()).tools; } catch (e) { coachToolsOK = false; } }
+        coachUi();
+      }, () => { coachAvail = false; coachUi(); });
       else coachAvail = false;
     }
     coachUi();
-    if (!chatMsgs.length) $("#chat").innerHTML = '<div class="bubble ai">Ask me anything about your sleep, or tap a question above. I answer from your own logged nights, your goal and the patterns Lull found.</div>';
+    renderChatLog();
   }
   function coachUi() {
     $("#coachSend").disabled = coachBusy; $("#coachStop").hidden = !(coachBusy && coachCtl);
     $$("#coachChips button").forEach(b => { b.disabled = coachBusy; });
-    $("#coachNote").textContent = (noData() ? "No logged nights yet. " : "Uses your last " + Math.min(21, realList().length) + " nights. ") + (coachAvail ? "Answers by Claude." : coachAvail === false ? "Answers from Lull's built-in analysis." : "Checking for Claude...");
+    $("#coachNote").textContent = (noData() ? "No nights logged yet. " : "Knows your last " + Math.min(21, realList().length) + " nights. ")
+      + (coachAvail ? (coachToolsOK ? "Powered by Claude; can update your log when you ask." : "Powered by Claude.") : coachAvail === false ? "Using Lull's built-in analysis." : "Checking for Claude...");
   }
   const claudeFail = e => {
     const c = e && e.code;
     if (c === "not_granted") return "You didn't allow Claude to read your summary, so this answer is from Lull's built-in analysis.";
-    if (c === "rate_limited") return "Claude is busy or your usage limit was reached, so this answer is from Lull's built-in analysis. Try Claude again later.";
+    if (c === "rate_limited") return "Claude is busy or your usage limit was reached, so this answer is from Lull's built-in analysis. Try again later.";
+    if (c === "refused") return "Claude declined that question, so this answer is from Lull's built-in analysis.";
     if (c === "sampling_disabled" || c === "not_declared" || c === "capability_disabled" || c === "capability_removed") return "Claude isn't available for this account here, so this answer is from Lull's built-in analysis.";
     if (c === "session_expired") return "Your claude.ai session expired. Sign in again to use Claude. This answer is from Lull's built-in analysis.";
     return "Claude couldn't answer just now, so this answer is from Lull's built-in analysis. You can ask again.";
   };
+  function buildTurns(q, toolsOn) {
+    const hist = chatMsgs.filter(m => m.r !== "x").slice(0, -1).slice(-10);
+    const turns = [];
+    hist.forEach(m => {
+      const role = m.r === "u" ? "user" : "assistant";
+      if (turns.length && turns[turns.length - 1].role === role) turns[turns.length - 1].content += "\n\n" + m.t;
+      else turns.push({ role, content: m.t });
+    });
+    while (turns.length && turns[0].role !== "user") turns.shift();
+    const fin = COACH_RULES + (toolsOn ? COACH_TOOL_RULES : "") + "\n\nDATA\n" + coachContext(toolsOn) + "\n\nQUESTION\n" + q;
+    if (turns.length && turns[turns.length - 1].role === "user") turns[turns.length - 1].content += "\n\n" + fin;
+    else turns.push({ role: "user", content: fin });
+    return turns;
+  }
   async function ask(q) {
     q = (q || "").trim(); if (!q || coachBusy) return;
     coachBusy = true; coachUi();
     const chat = $("#chat");
     if (!chatMsgs.length) chat.innerHTML = "";
-    const me = document.createElement("div"); me.className = "bubble me"; me.textContent = q; chat.appendChild(me);
-    const ai = document.createElement("div"); ai.className = "bubble ai"; ai.textContent = "Thinking..."; chat.appendChild(ai); chat.scrollTop = chat.scrollHeight;
+    chatMsgs.push({ r: "u", t: q });
+    chat.appendChild(bubble("me", q));
+    const ai = bubble("ai", "Thinking..."); chat.appendChild(ai); scrollChat();
     let note = "", done = false;
     if (coachAvail === null && coachP) await coachP;
     if (coachAvail) {
-      chatMsgs.push({ role: "user", content: q });
-      const msgs = chatMsgs.map((m, i) => i === 0 ? { role: "user", content: COACH_RULES + "\n\nDATA\n" + coachContext() + "\n\nQUESTION\n" + m.content } : m);
-      ai.textContent = "Thinking. Claude can take up to a minute...";
+      const toolsOn = !!coachToolsOK;
+      const progress = t => { if (/^(Thinking|…)/.test(ai.textContent)) { ai.textContent = "… " + t; scrollChat(); } };
+      const actReceipt = t => { chat.insertBefore(bubble("act", "✓ " + t), ai); chatMsgs.push({ r: "x", t }); scrollChat(); };
+      const turns = buildTurns(q, toolsOn);
+      ai.textContent = "Thinking. This can take up to a minute...";
       try {
         coachCtl = new AbortController(); coachUi();
-        const res = await coachAvail(msgs, { signal: coachCtl.signal, cache: false, onText: u => { ai.textContent = u.text; chat.scrollTop = chat.scrollHeight; } });
-        ai.textContent = res.text; chatMsgs.push({ role: "assistant", content: res.text }); done = true;
+        const opts = { signal: coachCtl.signal, onText: u => { ai.textContent = u.text; scrollChat(); } };
+        if (toolsOn) opts.tools = buildCoachTools(progress, actReceipt); else opts.cache = false;
+        const res = await coachAvail(turns, opts);
+        ai.textContent = res.text; chatMsgs.push({ r: "a", t: res.text }); done = true;
       } catch (e) {
-        chatMsgs.pop();
-        if (e && e.code === "cancelled") { ai.textContent = (e.text ? e.text + "\n\n" : "") + "Stopped."; done = true; }
-        else if (e && e.text && e.code === "upstream_error") { ai.textContent = e.text + "\n\n(The answer was interrupted. Ask again for the full version.)"; done = true; }
-        else { note = claudeFail(e); if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].indexOf(e && e.code) >= 0) coachAvail = false; }
+        if (e && e.code === "cancelled") { const t = (e.text ? e.text + "\n\n" : "") + "Stopped."; ai.textContent = t; chatMsgs.push({ r: "a", t }); done = true; }
+        else if (e && e.text && e.code === "upstream_error") { const t = e.text + "\n\n(The answer was interrupted. Ask again for the full version.)"; ai.textContent = t; chatMsgs.push({ r: "a", t }); done = true; }
+        else { note = claudeFail(e); if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].indexOf(e && e.code) >= 0) { coachAvail = false; coachToolsOK = false; } }
       }
       coachCtl = null;
     }
     if (!done) {
-      const a = localCoach(q);
-      ai.textContent = a + (note ? "\n\n(" + note + ")" : "");
-      chatMsgs.push({ role: "user", content: q }, { role: "assistant", content: a });
+      const a = localCoach(q) + (note ? "\n\n(" + note + ")" : "");
+      ai.textContent = a; chatMsgs.push({ r: "a", t: a });
     }
-    coachBusy = false; coachUi(); chat.scrollTop = chat.scrollHeight;
+    saveChat();
+    coachBusy = false; coachUi(); scrollChat();
   }
 
   /* ================= me ================= */
@@ -1770,6 +2008,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     if (t.closest("#qMore")) openLog(today(), { bed: $("#qBed").value, wake: $("#qWake").value, quality: +($("#cQuick input[name=qq]:checked") || { value: 0 }).value, tags: $$("#cQuick [data-qtag][aria-pressed=true]").map(b => b.dataset.qtag) });
     const ch = t.closest("[data-qtag]"); if (ch) ch.setAttribute("aria-pressed", ch.getAttribute("aria-pressed") === "true" ? "false" : "true");
     if (t.closest("[data-quickedit]")) openLog(today());
+    if (t.closest("[data-readout]")) { show("coach"); ask(READOUT_Q); }
     const gt = t.closest("[data-goto]");
     if (gt) { if (gt.dataset.goto === "calm") { toolSub = "calm"; show("tools"); } else { const l = $("#stepsList"); l.hidden = !l.hidden; } }
     const fc = t.closest("[data-focus]");
@@ -1816,8 +2055,11 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   on("#v-insights", "click", e => {
     const b = e.target.closest("#useNeed"); if (b) { cfg.need = clamp(+b.dataset.need, 5, 11); touchMeta(); commit(); renderInsights(); }
     const fp = e.target.closest("[data-focuspick]"); if (fp) { pickFocus(fp.dataset.focuspick); say($("#sumNote"), "Habit changed. See it on Home.", "ok"); renderIdeas(); }
+  });
+  on("#v-coach", "click", e => {
     const c = e.target.closest("[data-chip]"); if (c) ask(JSON.parse($("#coachChips").dataset.prompts)[+c.dataset.chip]);
   });
+  on("#chatClear", "click", () => { if (coachBusy && coachCtl) coachCtl.abort(); chatMsgs = []; saveChat(); renderChatLog(); });
   on("#clockDetails", "toggle", () => { if ($("#clockDetails").open) drawRhythm(); });
   on("#coachStop", "click", () => { if (coachCtl) coachCtl.abort(); });
   on("#coachForm", "submit", e => { e.preventDefault(); const q = $("#coachIn").value; $("#coachIn").value = ""; ask(q); });
@@ -1911,7 +2153,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     rz = setTimeout(() => {
       if (window.innerWidth === lastW) return; lastW = window.innerWidth;
       if (current === "home") renderKey();
-      else if (current === "insights") { drawMain(); if ($("#clockDetails").open) drawRhythm(); }
+      else if (current === "insights") { drawMain(); drawHeat(dataList()); if ($("#clockDetails").open) drawRhythm(); }
       else if (current === "tools" && toolSub === "energy") { drawEnergy(); renderCaffeine(); }
     }, 150);
   });
