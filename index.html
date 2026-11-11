@@ -304,7 +304,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
         <button type="submit" class="btn" id="coachSend">Ask</button>
         <button type="button" class="btn ghost" id="coachStop" hidden>Stop</button>
       </form>
-      <p class="small soft">Luna answers with Claude when it's available; otherwise she uses Lull's built-in analysis of your logged nights. With Claude she can also log nights, log caffeine, set your weekly habit and change schedule settings, but only when you ask her to. She isn't a doctor and can be wrong.</p>
+      <p class="small soft">Ask Luna anything about sleep: falling asleep, waking at night, naps, caffeine, shift work, kids, snoring, melatonin. She uses your logged nights when they help, but you don't need any. She answers with Claude when it's available, and otherwise from Lull's built-in sleep knowledge. With Claude she can also log nights, log caffeine, set your weekly habit and change schedule settings, but only when you ask. She isn't a doctor and can be wrong.</p>
     </div>
   </section>
 
@@ -1614,7 +1614,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
 
   function coachContext(lean) {
     const real = realList(), list = real.slice(lean ? -7 : -21), c = chrono(real), r = sri(real.slice(-30)), p = prof();
-    if (!list.length) return "The person has not logged any nights yet. Give general guidance and encourage them to log a few nights.";
+    if (!list.length) return "The person has not logged any nights yet, so you have no personal data. Answer from general sleep knowledge, and mention logging a few nights only if it would genuinely help their question.";
     const s = summarize(real.slice(-14));
     const caf = cafDay(today());
     const bedT = planBedtime();
@@ -1628,13 +1628,70 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       "\nMost recent nights (oldest first):\n" + list.map(nightLine).join("\n");
   }
 
-  const COACH_RULES = "You are Luna, the sleep coach inside Lull, a sleep tracking app. You are warm, encouraging and plainspoken, never preachy. Ground every answer in the person's logged data below and well-established sleep science (sleep regularity, light timing, caffeine half-life, CBT-I principles). Be specific: cite dates, times and numbers from the data, and tie advice to their stated goal. Give at most three concrete, prioritized actions; often one is better. Say when the data is too thin to conclude, and never present a correlation as proof. You are not a doctor: do not diagnose; if the data or question suggests insomnia lasting months, sleep apnea signs, severe sleepiness or low mood, advise seeing a clinician. Do not recommend sleeping pills or supplements beyond saying to ask a pharmacist or doctor. Write plain conversational text, no markdown headings, bullets or tables, under 200 words unless the person asks for more.";
+  const COACH_RULES = "You are Luna, a warm, knowledgeable sleep coach inside Lull, a sleep tracking app. You can talk about anything related to sleep: falling and staying asleep, the body clock and light, naps, caffeine, alcohol, bedroom setup, shift work, jet lag, sleep across ages (children, teenagers, older adults, pregnancy), dreams, snoring and sleep apnea warning signs, insomnia and CBT-I, restless legs, melatonin and other sleep aids, sleep trackers, and how lifestyle affects sleep. You are not limited to the person's logged data: answer general questions from established sleep science, like a knowledgeable friend would, even when the person has logged nothing. When the optional context below about the person is relevant, use it and cite specific dates, times and numbers; when it is missing or irrelevant, simply answer the question, and never refuse or deflect because data is missing. Be practical and specific: usually one to three concrete steps, each with a one-sentence reason. Match length to the question: short for simple ones, up to about 250 words for complex ones. Be honest about uncertainty and where evidence is mixed, and never present a correlation as proof. You are not a doctor: do not diagnose, but do explain what a pattern could mean and when to see a clinician (loud snoring with gasping or pauses, severe daytime sleepiness or drowsy driving, insomnia lasting three months or more, low mood, acting out dreams, restless legs, and anything involving the safety of a baby or child). For melatonin, supplements and sleep medicines, give balanced evidence-based information and suggest checking with a pharmacist or doctor about dosing, interactions, pregnancy and children, without giving a personal dose. If asked about something unrelated to sleep and rest, say briefly that you are a sleep coach and steer back. Write plain conversational text in short paragraphs, with no markdown headings or tables; a short plain list is fine when listing steps. Use the person's name rarely.";
   const COACH_TOOL_RULES = " You have tools. Use get_nights when you need more nights or more detail than the summary. log_night, update_settings, set_weekly_habit and log_caffeine change the person's real data: use them only when the person clearly asked for that change in this conversation, with values they gave or confirmed, never invented ones, and afterwards say plainly what you changed. If log_night reports that a night already exists, ask the person before overwriting.";
 
-  /* ---- built-in coach: answers from the person's own numbers ---- */
+  /* ---- built-in sleep knowledge: general answers that need no logged data ---- */
+  const KB = [
+    { id: "apnea", re: /snor|apn?oea|gasp|chok(e|ing)|stop(s|ped)? breathing/, text: "Loud, regular snoring, gasping or choking at night, pauses in breathing someone has noticed, morning headaches and heavy daytime sleepiness are the classic signs of obstructive sleep apnea. It is common and very treatable, but an app or a tracker can't diagnose it. Please mention it to a doctor; a sleep study is the test.\n\nSleeping on your side, avoiding alcohol close to bedtime and weight changes can ease mild snoring, but they are not a substitute for getting checked if you have the other signs." },
+    { id: "rls", re: /restless leg|rls\b|legs?.*(creep|crawl|urge|can't keep still)/, text: "An urge to move your legs in the evening, with creeping or crawling sensations that ease when you move, can be restless legs syndrome. Low iron is a common and treatable cause, so ask a doctor for a ferritin blood test. Caffeine, alcohol and some medicines (certain antihistamines and antidepressants) can make it worse. Regular moderate exercise and a warm bath can help while you get it checked." },
+    { id: "melatonin", re: /melatonin|supplement|magnesium|valerian|cbd\b|sleeping pill|sleep aid|ambien|zolpidem|benadryl|diphenhydramine|gummies|ashwagandha|l-theanine|glycine/, text: "Melatonin is a timing signal, not a sedative. It works best for jet lag, shift work and a body clock that runs late, and much less well as a general sleeping pill. If you try it, typical doses are low (0.5 to 3 mg) taken a few hours before you want to sleep; more is not better, and product quality varies a lot.\n\nMagnesium, valerian, L-theanine and herbal blends have weak or mixed evidence. Over-the-counter sleep aids with antihistamines (diphenhydramine, doxylamine) cause grogginess and are not recommended for regular use.\n\nCheck with a pharmacist or doctor before starting anything if you take medicines, are pregnant or nursing, or are choosing for a child. I can't give you a personal dose. For long-term insomnia, CBT-I beats pills." },
+    { id: "shift", re: /shift work|night shift|nightshift|graveyard|rotating|work(ing)? nights/, text: "Shift work pulls against your body clock, so the aim is damage control:\n\n- Get bright light at the start of your shift and wear dark sunglasses on the way home.\n- Make the bedroom very dark, cool and quiet (blackout curtains, white noise), and tell people when you sleep.\n- Keep caffeine to the first half of your shift.\n- Protect one anchor sleep of at least 4 hours at the same time each day, and consider a 20 to 30 minute nap before a night shift.\n- After a run of nights, move earlier gradually rather than flipping all at once.\n\nIf you're always exhausted, or drowsy while driving home, say so to your doctor; shift work sleep disorder is real and treatable." },
+    { id: "jet", re: /jet ?lag|time ?zone|flight|travel(l?ing)? (east|west)|long.?haul/, text: "Jet lag is your body clock disagreeing with local time. Flying east is harder because you need to move your clock earlier. The levers are light, timing and consistency: shift bed and wake times by about an hour a day before you go if you can, get bright light at the right time of day at your destination (morning for eastward trips, evening for westward), eat on local time, and keep naps under 30 minutes and before 3 pm local time.\n\nThe Tools tab has a day-by-day jet lag planner built from your own schedule." },
+    { id: "dst", re: /daylight saving|clocks? (change|go (forward|back))|\bdst\b|spring forward|fall back/, text: "A one-hour clock change is like mild jet lag. Move your bed and wake times by 15 minutes a day for 3 to 4 days before it, get bright light soon after waking, and keep your wake time steady afterwards. Evening light and late caffeine in the first week make it worse." },
+    { id: "kids", re: /\bbab(y|ies)\b|infant|newborn|toddler|child|\bkids?\b|\bteen|my (son|daughter)|school.?age/, text: "Sleep needs by age (including naps): infants 12 to 16 hours, toddlers 11 to 14, school-age children 9 to 12, teenagers 8 to 10, adults 7 to 9. What helps at every age is the same: a predictable bedtime routine, a dark and cool room, a consistent wake time and screens away before bed.\n\nTeenagers' body clocks genuinely shift later, so morning light and an early screen cutoff matter more for them. For infants, follow safe-sleep guidance (on the back, on a firm flat surface, nothing loose in the cot). For specific problems with a child's sleep, a pediatrician is the right person; I can give general information but not medical advice for your child." },
+    { id: "hormones", re: /pregnan|menopaus|perimenopaus|hot flash|night sweats?|hormon|\bperiod\b/, text: "Hormones change sleep. In pregnancy, sleeping on your side with a pillow between the knees, finishing fluids earlier, avoiding late caffeine and a cool room help; talk to your midwife or doctor before taking anything for sleep. In perimenopause and menopause, hot flushes and night sweats fragment sleep: a cool room, light breathable bedding, limiting alcohol and spicy food in the evening, and regular exercise help, and there are medical options worth discussing with a doctor if it's wearing you down." },
+    { id: "dreams", re: /dream|nightmare|sleep paralysis|sleep.?walk|night terror|talk(ing)? in (my|your) sleep|act(ing)? out/, text: "Everyone dreams, mostly in REM sleep, which lengthens through the night. Vivid dreams often follow stress, irregular sleep, alcohol stopping, or some medicines. An occasional nightmare is normal, and sleep paralysis is usually harmless though scary; regular sleep and less alcohol reduce it.\n\nSee a doctor if nightmares are frequent or distressing, if you're sleepwalking in a way that could hurt you, or if you physically act out your dreams (which can be a REM sleep behavior disorder worth checking)." },
+    { id: "caffeine", re: /caffein|coffee|espresso|energy drink|\btea\b|\bcola\b|matcha|pre.?workout/, tag: "caffeine", text: "Caffeine blocks the signal that makes you feel sleepy, and it lingers: the half-life is about 5 hours (anywhere from 3 to 9 depending on genes, medicines, smoking, pregnancy and hormonal contraceptives). A 95 mg coffee at 3 pm still leaves roughly a third of it in you at 11 pm.\n\nA good rule is to have your last caffeine at least 8 hours before bed (6 is the bare minimum) and stay under about 400 mg a day. Decaf has a little caffeine too. If you feel fine but sleep badly, caffeine can still be cutting your deep sleep." },
+    { id: "alcohol", re: /alcohol|\bwine\b|\bbeer\b|nightcap|\bdrinks?\b.*(sleep|bed)|(sleep|bed).*\bdrinks?\b/, tag: "alcohol", text: "Alcohol makes you drowsy but wrecks the second half of the night: it fragments sleep, cuts REM sleep, worsens snoring and breathing, and often wakes you at 3 or 4 am as it wears off. Tolerance to the sedative effect builds within days, so it's a poor sleep aid.\n\nIf you drink, finish at least 3 hours before bed and have water alongside. Nights you want to sleep well are the nights to skip it." },
+    { id: "nap", re: /\bnap|siesta|power nap|daytime sleep/, tag: "nap", text: "A 10 to 20 minute nap in the early afternoon (roughly 6 to 9 hours after waking, and before about 3 pm) boosts alertness without costing you the night. Longer naps can leave you groggy and take the edge off sleepiness at bedtime. If you struggle to fall asleep at night, skip naps for a couple of weeks.\n\nA \"coffee nap\" (caffeine right before a 20 minute nap) works because the caffeine kicks in as you wake. The Tools tab has a nap planner with a timer." },
+    { id: "screens", re: /screen|phone|blue.?light|\btv\b|netflix|scroll|night mode|tablet|doomscroll/, tag: "screens", text: "Blue light is a small part of the problem. The bigger one is engagement: messages, scrolling and video keep your brain alert and quietly push bedtime later. Dimming and warm tones help a bit, but the best fix is to put the phone away, ideally across the room, for the last 30 to 60 minutes and swap it for something low-key like a paper book.\n\nIf you must use a screen, lower the brightness, keep content calm, and avoid anything that stirs up work or arguments." },
+    { id: "exercise", re: /exercis|workout|gym|\brun(ning)?\b|training|\bsport|yoga|cardio/, tag: "exercise", text: "Regular exercise deepens sleep and helps you fall asleep faster, and it also lifts mood, which helps sleep too. Morning or afternoon is the safest time. Hard workouts in the last hour before bed raise heart rate and body temperature in some people, though others sleep fine; gentle evening movement like stretching or yoga is generally fine. Consistency beats timing: the best routine is the one you keep." },
+    { id: "environment", re: /bedroom|room temp|temperature|mattress|pillow|white noise|noisy|\bnoise\b|too (hot|warm|bright|cold)|blackout|curtain|earplug|eye mask|\bfan\b|air con/, text: "Aim for a bedroom that is cool (about 16 to 19 °C / 60 to 67 °F), dark and quiet. Even small amounts of light from chargers or street lamps matter, so use blackout curtains or an eye mask. Steady white or pink noise masks sudden sounds better than silence in a noisy area. Keep the bed for sleep and intimacy so your brain links it with rest.\n\nA warm shower an hour or two before bed helps too: the drop in core body temperature afterwards is a sleep cue." },
+    { id: "stress", re: /stress|anxi|worr(y|ies|ied)|racing (mind|thoughts)|overthink|rumina|busy mind|can't (switch|turn) off|mind (won't|wont) (stop|switch)/, tag: "stress", text: "A busy mind at night is one of the most common sleep problems, and it feeds itself: worrying about sleep keeps you awake. A few things that work:\n\n- A worry dump earlier in the evening: write tomorrow's tasks and worries on paper, not in bed.\n- Slow breathing with longer exhales (Tools, Wind down) lowers arousal within minutes.\n- If you're lying there ruminating after about 20 minutes, get up, keep the light low, and return when sleepy.\n- Stop trying to sleep. Aim for rest; the pressure itself is what keeps you awake.\n\nIf anxiety or low mood is affecting your days as well as your nights, talk to a doctor or therapist. CBT-I and CBT are effective." },
+    { id: "waking", re: /3 ?am|4 ?am|wake.*(night|middle|early)|middle of the night|waking up (a lot|often|at night)|keep waking|early.?morning|too early|wake up (too )?early|nocturia|pee at night/, text: "Brief awakenings are normal; most people surface several times a night and forget it. Waking for a long stretch in the small hours usually traces to one of these: alcohol wearing off, a warm room, stress, a late big meal or caffeine, a full bladder, or sleep apnea.\n\nWhat helps: don't check the clock, keep the room cool and dark, and if you're still awake after about 20 minutes get up, keep lights low and do something dull until you're sleepy. Keep your wake-up time fixed the next morning and skip long naps so sleep pressure builds. If you also snore loudly, gasp, or are very sleepy by day, mention it to a doctor." },
+    { id: "insomnia", re: /fall(ing)? asleep|get(ting)? to sleep|can'?t sleep|cant sleep|cannot sleep|insomnia|trouble sleeping|toss|lie awake|lying awake|hard to sleep|sleepless|won'?t sleep/, text: "Trouble falling asleep usually comes down to timing, arousal or habits. In order of impact:\n\n1. Keep a fixed wake-up time. It anchors your body clock more than bedtime does.\n2. Get bright light within an hour of waking and keep evenings dim.\n3. Last caffeine about 8 hours before bed.\n4. Go to bed when you feel sleepy, not at a fixed time.\n5. In bed, if you're awake after roughly 20 minutes, get up, keep lights low and do something dull until sleepy, so bed stops being linked with worry.\n\nA 5-minute slow-breathing wind-down helps too (Tools). If this happens 3 or more nights a week for 3 or more months, that's chronic insomnia; CBT-I is the first-line treatment and works better long-term than sleeping pills, so ask a doctor about it." },
+    { id: "need", re: /how (much|many hours)|hours of sleep|enough sleep|need.*sleep|sleep.*need|8 hours|7 hours|6 hours|short sleeper/, text: "Most adults need 7 to 9 hours; some do well on 6.5 and a few need 9 or more. Teenagers need 8 to 10, school-age children 9 to 12. A practical test: you wake without an alarm feeling reasonably refreshed, and you don't need caffeine just to function before noon.\n\nRegularly sleeping under 6 hours is linked with worse health, and \"training yourself\" to need less mostly doesn't work; people just get used to feeling worse. Needing more than 10 hours and still feeling unrefreshed is worth mentioning to a doctor.", personal: "need" },
+    { id: "oversleep", re: /oversleep|sleep(ing)? (too )?much|sleeping too|always sleepy|hypersomn|sleep(ing)? all day|can'?t get out of bed/, text: "Sleeping a lot more than usual can simply be catching up on sleep debt, which is fine. It can also go with depression, sleep apnea, some medicines or thyroid problems. Big weekend lie-ins shift your body clock later (social jet lag), so try keeping your wake-up within an hour of weekdays.\n\nIf you consistently need 10 or more hours and still feel unrefreshed, or it comes with low mood or loss of interest, talk to a doctor." },
+    { id: "stages", re: /deep sleep|\brem\b|stages|sleep cycle|90.?minute|light sleep/, text: "Sleep runs in cycles of about 90 minutes: light sleep, deep (slow-wave) sleep, and REM. Deep sleep is concentrated in the first half of the night and REM in the second half, which is why cutting a night short by 2 hours costs you mostly REM.\n\nConsumer devices can't measure stages well. You can support deep sleep with a consistent schedule, regular exercise, a cool room and little alcohol; and REM by simply getting enough hours." },
+    { id: "trackers", re: /tracker|oura|whoop|apple watch|fitbit|garmin|wearable|sleep score|accura/, text: "Consumer trackers estimate sleep from movement and heart rate. They're decent at total sleep time and bed and wake times, and poor at telling stages apart. Lull works from what you report (when you went to bed and woke, how long you took to fall asleep, how rested you feel), which is rougher than a lab but captures what matters for habits.\n\nDon't let a score make you anxious about sleep; chasing perfect numbers has its own name (orthosomnia) and can make sleep worse." },
+    { id: "schedule", re: /schedule|night owl|early bird|morning person|chronotype|body clock|circadian|reset|go(ing)? to bed (earlier|later)|wake up earlier|shift my|delayed sleep|sleep phase/, text: "Your body clock can move, but slowly, about 15 to 30 minutes a day. To shift earlier: pick the new wake time and hold it every day (weekends included), get bright light within an hour of waking, keep evenings dim, and move bedtime earlier in 15 to 30 minute steps as you get sleepy sooner.\n\nIf you're a natural night owl, expect it to take weeks and to need light discipline to hold. If your clock runs very late and nothing shifts it, that can be delayed sleep phase, and a sleep clinic can help." },
+    { id: "tips", re: /\btips?\b|sleep better|improve (my )?sleep|sleep hygiene|good habits|best way to sleep|advice/, text: "If you only do five things:\n\n1. Fixed wake-up time every day, weekends too.\n2. Bright light in the first hour after waking.\n3. Last caffeine about 8 hours before bed, and little alcohol.\n4. A cool, dark, quiet bedroom, phone away from the bed.\n5. A 30 to 45 minute wind-down with dim light and no stressful screens.\n\nChange one at a time so you can tell what helped. Lull's weekly habit does exactly that." },
+    { id: "tired", re: /tired|exhaust|fatigue|groggy|sleepy|drowsy|low energy|no energy|why am i/, noData: true, text: "Daytime tiredness has more causes than too little sleep. The usual suspects: not enough hours or a shifting schedule, poor-quality sleep (alcohol, noise, heat, undiagnosed sleep apnea), late caffeine, too little daylight and movement, stress or low mood, and medical causes like low iron or thyroid problems.\n\nBest first steps: fix a wake-up time and protect 7 to 8 hours around it, get morning daylight and a walk, and log your nights for a week so Lull can show what's going on. If tiredness is heavy, persistent or you're drowsy while driving, see a doctor." }
+  ];
+  function tagLine(real, id) {
+    const r = real.length >= 6 ? tagEffects(real.slice(-30)).filter(x => x.tag.id === id)[0] : null;
+    return r && r.ok ? "In your own log, nights with \"" + r.tag.label.toLowerCase() + "\" took " + Math.round(r.w.l) + " minutes to fall asleep against " + Math.round(r.wo.l) + " without, and you felt " + r.w.q.toFixed(1) + " against " + r.wo.q.toFixed(1) + " out of 5 rested (" + r.nw + " nights vs " + r.nwo + ", " + r.conf.toLowerCase() + ")." : "";
+  }
+  function kbAnswer(t, real, f) {
+    const hit = KB.filter(k => k.re.test(t) && !(k.noData && real.length))[0];
+    if (!hit) return "";
+    let out = hit.text;
+    if (real.length >= 3) {
+      const s = summarize(real.slice(-14));
+      let extra = "";
+      if (hit.tag) extra = tagLine(real, hit.tag);
+      if (hit.id === "caffeine") {
+        const items = cafDay(today()), p = planBedtime(), bed = p.bed < p.wake ? p.bed + 1440 : p.bed;
+        extra = (extra ? extra + " " : "") + "For your bedtime of " + clock(p.bed) + ", a last coffee by " + clock(cafCutoff()) + " leaves little behind." + (items.length ? " Based on the drinks you logged today, about " + Math.round(cafAt(items, bed)) + " mg will still be in you at bedtime." : "");
+      }
+      if (hit.id === "insomnia" && s.latency > 20) extra = "In your log it takes you about " + Math.round(s.latency) + " minutes to fall asleep on average.";
+      if (hit.id === "need") extra = "Your goal in Lull is " + cfg.need + " h, and over the last two weeks you averaged " + dur(s.asleep) + " asleep." + (real.filter(e => e.quality >= 4).length >= 3 ? " On the nights you felt rested you slept about " + dur(avg(real.filter(e => e.quality >= 4).map(e => e.c.asleep))) + "." : "");
+      if (hit.id === "schedule" && s.wakeSd > 30) extra = "Your wake time varies by about " + Math.round(s.wakeSd) + " minutes in your log, so tightening that is the first step.";
+      if (hit.id === "tips" && f) extra = "Your habit this week in Lull: " + f.title() + ".";
+      if (extra) out += "\n\nFrom your own nights: " + extra;
+    }
+    return out;
+  }
+  function noMatchAnswer(real) {
+    return "I'm Luna, your sleep coach. I can help with falling and staying asleep, waking at night, naps, caffeine and alcohol, bedroom setup, shift work, jet lag, sleep for kids and teens, snoring and when to see a doctor, melatonin, and how to shift your schedule. Try one of those" + (real.length ? ", or ask about your own nights: why you're tired, a review of your week, or a plan for the next three nights." : ". Log a few nights and I can also work from your own numbers.");
+  }
+
+  /* ---- built-in coach: general sleep knowledge plus the person's own numbers ---- */
   function localCoach(q) {
     const real = realList(), need = cfg.need * 60, t = (q || "").toLowerCase(), f = S.meta.focus && FOCUS[S.meta.focus.id];
-    if (!real.length) return "I can't see any logged nights yet, so anything I said about your sleep would be a guess. Log last night (about 20 seconds) and ask again." + (f ? " Until then, your habit for this week is: " + f.title() + "." : "");
+    const needsLog = /readout|last night|this morning|weekend|saturday|sunday|days off|review|how (am|did) i|my week|last 7|plan (my|the)|next (3|three)|my schedule/.test(t);
+    if (!real.length) return needsLog ? "That one needs your own nights, and I can't see any logged yet. Log last night (about 20 seconds) and ask again; a few nights is enough to start." + (f ? " Meanwhile, your habit for this week is: " + f.title() + "." : "") + "\n\nI can answer general sleep questions right now, such as how to fall asleep faster, naps, caffeine or shift work." : (kbAnswer(t, real, f) || noMatchAnswer(real));
     const last = real.slice(-7), s = summarize(last), prev = real.slice(-14, -7), pv = prev.length >= 3 ? summarize(prev) : null;
     const free = cfg.free || [], isFree = e => free.indexOf(fromKey(e.key).getDay()) >= 0;
     const fx = tagEffects(real.slice(-30)).filter(r => r.ok && r.verdict !== "flat" && r.conf !== "Can't tell yet").sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
@@ -1642,7 +1699,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     const weakest = e => e.score.parts.slice().sort((a, b) => a.v / a.max - b.v / b.max)[0].n.toLowerCase();
     const nights = last.length + " night" + (last.length === 1 ? "" : "s");
 
-    if (/readout|last night|this morning/.test(t)) {
+    if (/readout|last night|this morning|how was my sleep/.test(t)) {
       const e = real[real.length - 1], d7 = real.slice(-8, -1), s7 = d7.length >= 3 ? summarize(d7) : null;
       const sc = e.score, w = sc.parts.slice().sort((a, b) => a.v / a.max - b.v / b.max)[0];
       let out = (e.key === today() ? "Last night" : "Your latest night (" + fmtDate(e.key) + ")") + ": " + dur(e.c.asleep) + " asleep from " + clock(toMin(e.bed)) + " to " + clock(toMin(e.wake)) + ", " + e.latency + " minutes to drop off, score " + sc.total + " (" + scoreLabel(sc.total).toLowerCase() + ").";
@@ -1653,14 +1710,14 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       if (f) out += " Your weekly habit: " + f.title() + ".";
       return out;
     }
-    if (/weekend|saturday|sunday|days off|social/.test(t)) {
+    if (/weekend|saturday|sunday|days off|social jet/.test(t)) {
       const fr = real.filter(isFree), wk = real.filter(e => !isFree(e));
       if (fr.length < 2 || wk.length < 2) return "To compare weekends with weekdays I need at least 2 nights on your days off and 2 on workdays. You have " + fr.length + " and " + wk.length + " so far. Your days off are set in Me, under Your schedule.";
       const a = summarize(fr), b = summarize(wk), wshift = avg(fr.map(e => e.c.wakeMin)) - avg(wk.map(e => e.c.wakeMin));
       return "On days off you go to bed around " + clock(a.bedAvg) + " and wake " + (Math.abs(wshift) < 20 ? "at about the same time as on workdays" : "about " + dur(Math.abs(wshift)) + (wshift >= 0 ? " later" : " earlier") + " than on workdays") + " (workday bedtime: around " + clock(b.bedAvg) + "). You sleep " + dur(a.asleep) + " on days off against " + dur(b.asleep) + " on workdays.\n\n" +
         (Math.abs(wshift) > 60 ? "A wake time more than an hour different is like flying across time zones every weekend, and it makes Sunday night and Monday morning harder. Try waking within an hour of your weekday time, and get outside in daylight soon after." : "That is a small difference, so your weekends are not hurting your body clock.") + (c && c.sjl > 60 ? "\n\nYour sleep midpoint sits " + dur(c.sjl) + " later on days off." : "");
     }
-    if (/plan|next (3|three)|tonight|schedule|bedtime/.test(t)) {
+    if (/plan (my|the)|next (3|three)|my schedule|tonight/.test(t)) {
       const B = planBedtime().bed, Bn = bedN(B), cur = s.bedAvg, wake = toMin(cfg.wake), lines = [];
       let b = cur;
       for (let i = 0; i < 3; i++) { b = cur > Bn + 15 ? Math.max(Bn, b - 20) : Bn; lines.push(fmtDate(addDays(today(), i)) + ": in bed " + clock(b) + ", up " + clock(wake) + "."); }
@@ -1668,7 +1725,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
         (cur > Bn + 15 ? "You have averaged a " + clock(cur) + " bedtime, so I move you toward " + clock(B) + " in 20-minute steps. Small steps are easier to keep.\n\n" : "") +
         "Each evening: no caffeine after " + clock(cafCutoff()) + ", screens off an hour before bed, and a 5-minute wind-down 45 minutes before." + (f ? " Your habit this week: " + f.title() + "." : "");
     }
-    if (/week|review|summary|how am i|how did i|last 7/.test(t)) {
+    if (/review|my week|how (am|did) i|last 7|weekly/.test(t)) {
       const best = last.slice().sort((a, b) => b.score.total - a.score.total)[0], worst = last.slice().sort((a, b) => a.score.total - b.score.total)[0];
       let out = "Your last " + nights + ": you averaged " + dur(s.asleep) + " asleep (goal " + cfg.need + " h), fell asleep in about " + Math.round(s.latency) + " minutes, and scored " + Math.round(s.score) + " out of 100.";
       if (pv) { const d = s.score - pv.score; out += " That is " + (Math.abs(d) < 3 ? "about the same as" : d > 0 ? Math.round(d) + " points better than" : Math.round(-d) + " points worse than") + " the week before."; }
@@ -1677,13 +1734,8 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       else if (s.asleep < need - 30) out += "\n\nYou were " + dur(need - s.asleep) + " short of your goal each night on average, so an earlier bedtime is the lever.";
       return out + (f ? "\n\nOne thing to try this week: " + f.title() + "." : "");
     }
-    if (/caffein|coffee|tea\b|energy drink/.test(t)) {
-      const r = tagEffects(real.slice(-30)).filter(x => x.tag.id === "caffeine")[0], items = cafDay(today()), bed = planBedtime().bed < planBedtime().wake ? planBedtime().bed + 1440 : planBedtime().bed;
-      let out = r && r.ok ? "On nights after late caffeine you took " + Math.round(r.w.l) + " minutes to fall asleep against " + Math.round(r.wo.l) + " without it, and felt " + r.w.q.toFixed(1) + " against " + r.wo.q.toFixed(1) + " out of 5 rested (" + r.nw + " nights vs " + r.nwo + ", " + r.conf.toLowerCase() + ")." : "I don't have enough nights with and without late caffeine to see its effect on you yet. Tick \"Late caffeine\" when you log, and the Tools tab can track your drinks.";
-      out += "\n\nFor your bedtime of " + clock(planBedtime().bed) + ", a last coffee by " + clock(cafCutoff()) + " leaves little in your body.";
-      if (items.length) out += " Based on the drinks you logged today, about " + Math.round(cafAt(items, bed)) + " mg will still be in you at bedtime.";
-      return out;
-    }
+    const kb = kbAnswer(t, real, f);
+    if (kb) return kb;
     const causes = [];
     if (s.asleep < need - 30) causes.push({ w: (need - s.asleep) / 30, t: "You are short on sleep: " + dur(s.asleep) + " a night against your " + cfg.need + " h need, " + dur(s.debt) + " short this week. Try bed at " + clock(s.bedAvg - 20) + ", 20 minutes earlier than your average, for the next few nights." });
     if (s.wakeSd > 40) causes.push({ w: s.wakeSd / 40, t: "Your wake time moves around by about " + Math.round(s.wakeSd) + " minutes. Pick " + clock(toMin(cfg.wake)) + " and stay within 30 minutes of it every day, weekends included." });
@@ -1692,7 +1744,8 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
     if (fx.length) { const r = fx[0]; causes.push({ w: 1.2, t: (r.tag.kind === "bad" && r.verdict === "worse" ? "\"" + r.tag.label + "\" goes with worse nights for you" : "\"" + r.tag.label + "\" goes with better nights for you") + " (" + r.nw + " nights vs " + r.nwo + ", " + r.conf.toLowerCase() + "). " + (r.tag.kind === "bad" ? "Try cutting it for a week and compare." : "Keep doing it.") }); }
     if (c && c.sjl > 60) causes.push({ w: c.sjl / 60, t: "You sleep about " + dur(c.sjl) + " later on days off, which acts like weekly jet lag." });
     causes.sort((a, b) => b.w - a.w);
-    const lead = /tired|why|wake|exhaust|groggy|fatigue|sleepy|energy|refresh/.test(t) ? "" : "I'm not sure I caught that, so here is what stands out in your data. ";
+    if (!/tired|why|exhaust|groggy|fatigue|sleepy|drowsy|energy|refresh|wake up/.test(t)) return noMatchAnswer(real);
+    const lead = "";
     if (!causes.length) return lead + "Your last " + nights + " look healthy: " + dur(s.asleep) + " asleep, " + Math.round(s.latency) + " minutes to fall asleep and a wake time that varies by only " + Math.round(s.wakeSd) + " minutes. If you still feel tired, the cause may not be sleep amount. Daylight, activity and stress matter too, and persistent tiredness or loud snoring with gasping is worth raising with a doctor.";
     return lead + "From your last " + nights + ", the most likely reasons, in order:\n\n" + causes.slice(0, 3).map((x, i) => (i + 1) + ". " + x.t).join("\n\n") + "\n\nStart with number 1 only. This is general guidance, not a diagnosis.";
   }
@@ -1830,7 +1883,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   function renderChatLog() {
     const chat = $("#chat");
     if (!chatMsgs.length) {
-      chat.innerHTML = '<div class="bubble ai">' + esc("Hi" + (prof().name ? " " + prof().name : "") + ", I'm Luna. Ask me anything about your sleep, or tap a question above. I can see your logged nights, your goal and the patterns Lull found" + (coachToolsOK ? ", and I can log nights or change settings when you ask" : "") + ".") + "</div>";
+      chat.innerHTML = '<div class="bubble ai">' + esc("Hi" + (prof().name ? " " + prof().name : "") + ", I'm Luna, your sleep coach. Ask me anything about sleep, like falling asleep, waking at night, naps, caffeine, shift work or kids, or about your own nights" + (coachToolsOK ? ". I can also log nights or change settings when you ask" : "") + ".") + "</div>";
       return;
     }
     chat.innerHTML = "";
@@ -1839,14 +1892,21 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   }
 
   function renderCoach() {
-    const chips = [];
+    const chips = [], has3 = realList().length >= 3;
     if (S.entries[today()]) chips.push(["Morning readout", READOUT_Q]);
-    chips.push(
+    if (has3) chips.push(
       ["Why am I tired?", "Looking at my data, what is most likely making me feel tired, and what should I change first?"],
       ["Review my week", "Give me a short review of my last 7 nights: what went well, what didn't, and one thing to try this week."],
-      ["Plan my next 3 nights", "Plan my next three nights with specific bed and wake times and what to do in the evening."],
-      ["Is my weekend hurting me?", "Compare my weekday and weekend nights. Is my weekend schedule hurting my sleep?"]
+      ["Plan my next 3 nights", "Plan my next three nights with specific bed and wake times and what to do in the evening."]
     );
+    chips.push(
+      ["How do I fall asleep faster?", "How can I fall asleep faster?"],
+      ["Why do I wake up at 3am?", "Why do I wake up in the middle of the night, and what can I do about it?"],
+      ["Are naps OK?", "Are naps good or bad for sleep, and how should I nap?"],
+      ["Is melatonin worth trying?", "Is melatonin worth trying, and how does it work?"]
+    );
+    if (!has3) chips.push(["How much sleep do I need?", "How much sleep do I actually need?"]);
+    chips.splice(7);
     $("#coachChips").innerHTML = chips.map((c, i) => '<button type="button" class="chip-t" data-chip="' + i + '">' + esc(c[0]) + "</button>").join("");
     $("#coachChips").dataset.prompts = JSON.stringify(chips.map(c => c[1]));
     if (coachAvail === null && !coachP) {
@@ -1863,7 +1923,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   function coachUi() {
     $("#coachSend").disabled = coachBusy; $("#coachStop").hidden = !(coachBusy && coachCtl);
     $$("#coachChips button").forEach(b => { b.disabled = coachBusy; });
-    $("#coachNote").textContent = (noData() ? "No nights logged yet. " : "Knows your last " + Math.min(21, realList().length) + " nights. ")
+    $("#coachNote").textContent = (noData() ? "Ask anything about sleep. Log nights and she'll personalize answers. " : "Knows your last " + Math.min(21, realList().length) + " nights and can answer any sleep question. ")
       + (coachAvail ? (coachToolsOK ? "Powered by Claude; can update your log when you ask." : "Powered by Claude.") : coachAvail === false ? "Using Lull's built-in analysis." : "Checking for Claude...");
   }
   const claudeFail = e => {
@@ -1884,7 +1944,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       else turns.push({ role, content: m.t });
     });
     while (turns.length && turns[0].role !== "user") turns.shift();
-    const fin = COACH_RULES + (toolsOn ? COACH_TOOL_RULES : "") + "\n\nDATA\n" + coachContext(toolsOn) + "\n\nQUESTION\n" + q;
+    const fin = COACH_RULES + (toolsOn ? COACH_TOOL_RULES : "") + "\n\nOPTIONAL CONTEXT ABOUT THE PERSON (use only if relevant)\n" + coachContext(toolsOn) + "\n\nQUESTION\n" + q;
     if (turns.length && turns[turns.length - 1].role === "user") turns[turns.length - 1].content += "\n\n" + fin;
     else turns.push({ role: "user", content: fin });
     return turns;
