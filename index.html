@@ -606,7 +606,7 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       settings: { wake: "07:00", need: 8, h24: false, f: false, half: 5, free: [0, 6] },
       room: {}, exps: [],
       profile: { name: "", goal: "learn", issues: [], done: false },
-      focus: null, fl: {}, fhist: [], chat: []
+      focus: null, fl: {}, fhist: [], chat: [], chatV: 2
     }
   });
   const normalizeState = s => {
@@ -619,7 +619,8 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
       o.meta.room = m.room || {}; o.meta.exps = m.exps || [];
       Object.assign(o.meta.profile, m.profile || {});
       o.meta.focus = m.focus || null; o.meta.fl = m.fl || {}; o.meta.fhist = m.fhist || [];
-      o.meta.chat = Array.isArray(m.chat) ? m.chat.filter(x => x && typeof x.t === "string" && ["u", "a", "x"].indexOf(x.r) >= 0).slice(-40) : [];
+      /* conversations saved by earlier versions are dropped once: they may hold answers the coach no longer gives */
+      o.meta.chat = m.chatV === 2 && Array.isArray(m.chat) ? m.chat.filter(x => x && typeof x.t === "string" && ["u", "a", "x"].indexOf(x.r) >= 0).slice(-40) : [];
     }
     return o;
   };
@@ -1691,7 +1692,11 @@ footer { color: var(--ink-soft); font-size: 0.85rem; display: flex; flex-directi
   function localCoach(q) {
     const real = realList(), need = cfg.need * 60, t = (q || "").toLowerCase(), f = S.meta.focus && FOCUS[S.meta.focus.id];
     const needsLog = /readout|last night|this morning|weekend|saturday|sunday|days off|review|how (am|did) i|my week|last 7|plan (my|the)|next (3|three)|my schedule/.test(t);
-    if (!real.length) return needsLog ? "That one needs your own nights, and I can't see any logged yet. Log last night (about 20 seconds) and ask again; a few nights is enough to start." + (f ? " Meanwhile, your habit for this week is: " + f.title() + "." : "") + "\n\nI can answer general sleep questions right now, such as how to fall asleep faster, naps, caffeine or shift work." : (kbAnswer(t, real, f) || noMatchAnswer(real));
+    if (!real.length) {
+      const g = kbAnswer(t, real, f);
+      if (g) return g;
+      return needsLog ? "A review of your own nights needs a few logged nights first. Log last night (about 20 seconds) and ask again." + (f ? " Meanwhile, your habit for this week is: " + f.title() + "." : "") + "\n\nI can answer general sleep questions right now, such as how to fall asleep faster, naps, caffeine or shift work." : noMatchAnswer(real);
+    }
     const last = real.slice(-7), s = summarize(last), prev = real.slice(-14, -7), pv = prev.length >= 3 ? summarize(prev) : null;
     const free = cfg.free || [], isFree = e => free.indexOf(fromKey(e.key).getDay()) >= 0;
     const fx = tagEffects(real.slice(-30)).filter(r => r.ok && r.verdict !== "flat" && r.conf !== "Can't tell yet").sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
